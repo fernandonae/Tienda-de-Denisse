@@ -14,6 +14,6 @@ app.use('/api/partners', require('./routes/partner.routes'));
 
 
 // 🔥 FRONTEND (ESTE ERA EL ERROR)
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../')));
 
 module.exports = app;
