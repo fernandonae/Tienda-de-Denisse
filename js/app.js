@@ -424,6 +424,7 @@ btnReporteRango?.addEventListener('click', async () => {
 });
 
 // --- CÁLCULO DE TOTALES POR SOCIO ---
+// --- CÁLCULO DE TOTALES POR SOCIO (VERSIÓN CORREGIDA) ---
 function mostrarResultados(listaVentas, contenedorDiv) {
     if (listaVentas.length === 0) {
         contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hubo ventas en este periodo.</p>';
@@ -437,15 +438,26 @@ function mostrarResultados(listaVentas, contenedorDiv) {
         totalGeneral += v.total;
         
         v.products.forEach(item => {
-            // Buscamos el producto en la lista local para saber sus tags
-            const productoInfo = allProducts.find(p => p._id === item.product); 
+            // ✅ CORRECCIÓN IMPORTANTE:
+            // Convertimos los IDs a texto (String) para asegurar que se encuentren
+            const productoInfo = allProducts.find(p => String(p._id) === String(item.product)); 
             
-            if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
-                // Tomamos el primer tag como el Socio (ej: 'M' o 'P')
-                const tagSocio = productoInfo.tags[0].toUpperCase(); 
-                
-                // Calculamos monto (Precio x Cantidad)
-                const subtotal = productoInfo.price * item.quantity;
+            let precio = 0;
+            let tags = [];
+
+            if (productoInfo) {
+                precio = productoInfo.price;
+                tags = productoInfo.tags || [];
+            } else {
+                // Si el producto fue borrado de la base de datos, sale aquí
+                console.warn("Producto antiguo/borrado:", item.product);
+            }
+
+            const subtotal = precio * item.quantity;
+
+            // Lógica para asignar al socio correcto
+            if (productoInfo && tags.length > 0) {
+                const tagSocio = tags[0].toUpperCase(); 
 
                 if (porSocio[tagSocio]) {
                     porSocio[tagSocio] += subtotal;
@@ -453,10 +465,9 @@ function mostrarResultados(listaVentas, contenedorDiv) {
                     porSocio[tagSocio] = subtotal;
                 }
             } else {
-                // Sin tag
+                // Si no tiene tag o no se encontró el producto, va a GENERAL
                 if (!porSocio['GENERAL']) porSocio['GENERAL'] = 0;
-                const precio = productoInfo ? productoInfo.price : 0;
-                porSocio['GENERAL'] += precio * item.quantity;
+                porSocio['GENERAL'] += subtotal;
             }
         });
     });
@@ -464,14 +475,17 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     // Construir HTML
     let html = `
         <div class="flex justify-between items-center border-b pb-2 mb-2">
-            <span class="text-lg font-bold text-gray-700">TOTAL:</span>
+            <span class="text-lg font-bold text-gray-700">TOTAL VENTAS:</span>
             <span class="text-2xl font-bold text-green-600">${formatMoney(totalGeneral)}</span>
         </div>
         <div class="text-sm text-gray-600 space-y-1">
-            <p class="font-bold mb-1">Desglose por Socio:</p>
+            <p class="font-bold mb-1">Desglose estimado por Socio:</p>
     `;
 
+    // Generar la lista de socios
+    let sumaDesglosada = 0;
     for (const [tag, monto] of Object.entries(porSocio)) {
+        sumaDesglosada += monto;
         html += `
             <div class="flex justify-between">
                 <span class="uppercase">👤 ${tag}</span>
@@ -479,10 +493,21 @@ function mostrarResultados(listaVentas, contenedorDiv) {
             </div>
         `;
     }
+
+    // Mostrar diferencia si hay productos borrados (opcional)
+    if (totalGeneral > sumaDesglosada) {
+        const diferencia = totalGeneral - sumaDesglosada;
+         html += `
+            <div class="flex justify-between text-orange-500">
+                <span class="uppercase">⚠️ Prod. Borrados</span>
+                <span class="font-medium">${formatMoney(diferencia)}</span>
+            </div>
+        `;
+    }
+
     html += `</div>`;
     contenedorDiv.innerHTML = html;
 }
-
 // ====================
 // EXPORTAR A EXCEL (CSV)
 // ====================
