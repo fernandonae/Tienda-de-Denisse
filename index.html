@@ -137,64 +137,56 @@
 
     </section>
 
-    <!-- ================= REPORTES ================= -->
-    <section id="reportsSection" class="hidden">
+    <section id="reportsSection" class="hidden max-w-4xl mx-auto">
 
-      <h2 class="text-3xl font-bold mb-6">Reportes</h2>
+  <h2 class="text-3xl font-bold mb-6 text-gray-800">Reportes de Venta</h2>
 
-      <!-- POR DÍA -->
-      <div class="bg-white rounded-2xl shadow p-6 mb-6 max-w-xl">
-        <h3 class="text-xl font-bold mb-4 text-pink-600">
-          Reporte por día
-        </h3>
-
-        <div class="flex gap-4 mb-4">
-          <input type="date" id="dayDate" class="p-3 border rounded w-full">
-          <button id="dayReport"
-            class="bg-pink-600 text-white px-6 rounded">
-            Ver
-          </button>
-        </div>
-
-        <div class="space-y-1 text-gray-700">
-          <p>Total: <strong id="dayTotal">$0</strong></p>
-          <p>María: <strong id="dayMaria">$0</strong></p>
-          <p>Otro socio: <strong id="dayOtro">$0</strong></p>
-        </div>
-      </div>
-
+  <div class="grid md:grid-cols-2 gap-6">
     
+    <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-pink-500">
+      <h3 class="text-xl font-bold mb-4 text-pink-600">📅 Ventas de HOY</h3>
+      
+      <p class="text-gray-500 mb-4 text-sm">Carga las ventas realizadas el día de hoy.</p>
+      
+      <button id="btnReporteDia" 
+        class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 rounded-xl shadow transition">
+        Ver reporte de HOY
+      </button>
 
-      <!-- POR FECHAS -->
-      <div class="bg-white rounded-2xl shadow p-6 max-w-xl">
-        <h3 class="text-xl font-bold mb-4 text-pink-600">
-          Reporte por rango
-        </h3>
-
-        <div class="flex gap-4 mb-4">
-          <input type="date" id="startDate" class="p-3 border rounded w-full">
-          <input type="date" id="endDate" class="p-3 border rounded w-full">
-          <button id="rangeReport"
-            class="bg-pink-600 text-white px-6 rounded">
-            Ver
-          </button>
+      <div id="resultadoDia" class="mt-6 space-y-2 hidden bg-pink-50 p-4 rounded-lg">
         </div>
+    </div>
 
-        <div class="space-y-1 text-gray-700">
-          <p>Total: <strong id="rangeTotal">$0</strong></p>
-          <p>María: <strong id="rangeMaria">$0</strong></p>
-          <p>Otro socio: <strong id="rangeOtro">$0</strong></p>
-        </div>
+    <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-purple-500">
+      <h3 class="text-xl font-bold mb-4 text-purple-600">📆 Ventas por Fechas</h3>
+
+      <div class="flex flex-col gap-3 mb-4">
+        <label class="text-xs text-gray-500">Desde:</label>
+        <input type="date" id="startDate" class="p-2 border rounded w-full">
+        
+        <label class="text-xs text-gray-500">Hasta:</label>
+        <input type="date" id="endDate" class="p-2 border rounded w-full">
       </div>
 
-      <button onclick="exportarExcel()"
-        class="bg-green-600 text-white px-6 py-3 rounded-xl">
-           Exportar a Excel
-           </button>
+      <button id="btnReporteRango"
+        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl shadow transition">
+        Ver reporte
+      </button>
 
+      <div id="resultadoRango" class="mt-6 space-y-2 hidden bg-purple-50 p-4 rounded-lg">
+        </div>
+    </div>
 
-   </section>
-   
+  </div>
+
+  <div class="mt-8 text-center">
+    <button onclick="exportarExcel()"
+      class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow flex items-center gap-2 mx-auto">
+      <span>📥</span> Exportar Historial Completo a Excel
+    </button>
+  </div>
+
+</section>
 
     <!-- ===== SECCIÓN SOCIOS ===== -->
 <div id="partnersSection" class="hidden w-full p-6">

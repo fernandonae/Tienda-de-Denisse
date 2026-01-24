@@ -5,6 +5,11 @@ const partnerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // 👇 AQUÍ AGREGAMOS LO QUE FALTABA
+  tag: {
+    type: String,
+    required: true 
+  },
   color: {
     type: String,
     default: 'pink'
