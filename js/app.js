@@ -134,11 +134,30 @@ function renderProducts(products) {
     `;
 
     // 🔥 ESTA ES LA MAGIA: Al hacer clic, agrega al carrito
+    // ... dentro de renderProducts ...
+    
+    // 🔥 LÓGICA MÁGICA DE GRANEL
     card.onclick = () => {
+        const inputGranel = document.getElementById('bulkMoneyInput');
+        const dineroCliente = parseFloat(inputGranel.value); // Ej: 9 pesos
+
+        let cantidadAgregar = 1; // Por defecto es 1 pieza/kilo
+
+        // Si escribieron dinero (ej: 9) y el producto vale (ej: 36)
+        if (dineroCliente > 0) {
+            // Regla de 3:  (9 / 36) = 0.25 kg
+            cantidadAgregar = dineroCliente / p.price;
+            
+            // Limpiamos el input para que la siguiente venta no sea a granel por error
+            inputGranel.value = ''; 
+        }
+
+        // Enviamos la cantidad calculada al carrito
         if (p.stock > 0) {
-            addToCart(p);
-            // Efecto visual opcional: parpadeo verde
-            card.style.backgroundColor = '#dcfce7'; // Verde claro
+            addToCart(p, cantidadAgregar); // <--- OJO AQUÍ, pasamos la cantidad
+            
+            // Efecto visual
+            card.style.backgroundColor = '#dcfce7';
             setTimeout(() => card.style.backgroundColor = 'white', 150);
         } else {
             alert('⚠️ Producto agotado');
@@ -285,10 +304,15 @@ function renderCart() {
     const subtotal = Number(item.price) * Number(item.qty);
     total += subtotal;
     const tr = document.createElement('tr');
+    // Aquí construimos la fila
     tr.innerHTML = `
       <td>${item.name}</td>
       <td class="text-right">${formatMoney(item.price)}</td>
-      <td class="text-center">${item.qty}</td>
+      
+      <td class="text-center font-bold text-gray-700">
+        ${item.qty < 1 ? Number(item.qty).toFixed(3) : Number(item.qty)}
+      </td>
+
       <td class="text-right flex justify-end gap-2">
         ${formatMoney(subtotal)}
         <button onclick="removeFromCart(${index})" class="text-red-600 font-bold px-2">✖</button>
@@ -296,6 +320,7 @@ function renderCart() {
     `;
     cartTable.appendChild(tr);
   });
+  
   totalSpan.textContent = formatMoney(total);
   
   if (cashInput.value) {
@@ -311,19 +336,26 @@ function removeFromCart(index) {
   renderCart();
 }
 
-function addToCart(producto) {
-  const item = cart.find(p => p._id === producto._id);
+// Ahora la función recibe (producto, cantidad)
+function addToCart(producto, cantidad = 1) {
+  const item = cart.find(p => String(p._id) === String(producto._id));
+  
   if (item) {
-      if(item.qty + 1 > producto.stock) { alert('Stock insuficiente'); return; }
-    item.qty++;
+      // Sumamos la cantidad nueva (puede ser 1 o puede ser 0.25)
+      if(item.qty + cantidad > producto.stock) { 
+          alert('⚠️ Stock insuficiente'); 
+          return; 
+      }
+      item.qty += cantidad; // Sumar decimales
   } else {
     cart.push({ 
         _id: producto._id, 
         name: producto.name, 
         price: Number(producto.price), 
-        qty: 1 
+        qty: cantidad // Guardamos la cantidad exacta
     });
   }
+  
   renderCart();
 }
 
@@ -606,3 +638,7 @@ window.exportarExcel = async function() {
         alert('Error al generar Excel');
     }
 };
+
+document.getElementById('clearBulk')?.addEventListener('click', () => {
+    document.getElementById('bulkMoneyInput').value = '';
+});
