@@ -7,6 +7,7 @@ const API_URL = 'https://tienda-de-denisse.onrender.com/api';
 let allProducts = [];
 let allPartners = [];
 let cart = [];
+let productoEnEdicionId = null;
 
 // ====================
 // ELEMENTOS DEL DOM
@@ -126,17 +127,40 @@ function renderProductAdmin(products) {
 
   products.forEach(p => {
     const div = document.createElement('div');
-    div.className = 'bg-white p-3 rounded shadow flex justify-between items-center';
+    div.className = 'bg-white p-3 rounded shadow flex justify-between items-center mb-2';
     div.innerHTML = `
       <div>
         <strong>${p.name}</strong>
-        <p class="text-sm">${formatMoney(p.price)} | Stock: ${p.stock}</p>
+        <p class="text-sm text-gray-500">${formatMoney(p.price)} | Stock: ${p.stock}</p>
       </div>
       <div class="flex gap-2">
-        <button class="delete bg-red-600 text-white px-2 py-1 rounded">Eliminar</button>
+        <button class="edit bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded font-bold">✏️</button>
+        <button class="delete bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded font-bold">🗑️</button>
       </div>
     `;
 
+    // LÓGICA DE EDITAR (Rellenar formulario)
+    div.querySelector('.edit').onclick = () => {
+        // 1. Rellenar los campos
+        barcodeInput.value = p.barcode;
+        nameInput.value = p.name;
+        priceInput.value = p.price;
+        stockInput.value = p.stock;
+        tagsInput.value = p.tags ? p.tags.join(',') : '';
+
+        // 2. Bloquear el código de barras (para que no lo cambien)
+        barcodeInput.disabled = true;
+        barcodeInput.classList.add('bg-gray-200'); // Ponerlo gris
+
+        // 3. Cambiar modo a "Edición"
+        productoEnEdicionId = p._id;
+        document.getElementById('addProduct').textContent = '🔄 Actualizar Producto';
+        
+        // 4. Llevar al usuario arriba (al formulario)
+        productsSection.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    // LÓGICA DE ELIMINAR
     div.querySelector('.delete').onclick = async () => {
       if (!confirm(`Eliminar ${p.name}?`)) return;
       try {
@@ -149,7 +173,6 @@ function renderProductAdmin(products) {
     productList.appendChild(div);
   });
 }
-
 // ====================
 // LOGICA DE CARRITO Y CAJA
 // ====================
@@ -214,6 +237,9 @@ function getTotal() { return cart.reduce((sum, item) => sum + (Number(item.price
 // ====================
 // GUARDAR PRODUCTO
 // ====================
+// ====================
+// GUARDAR O ACTUALIZAR PRODUCTO
+// ====================
 document.getElementById('addProduct')?.addEventListener('click', async () => {
   const barcode = barcodeInput.value.trim();
   const name = nameInput.value.trim();
@@ -226,24 +252,56 @@ document.getElementById('addProduct')?.addEventListener('click', async () => {
     return;
   }
 
+  const btnGuardar = document.getElementById('addProduct');
+  btnGuardar.disabled = true; // Evitar doble click
+
   try {
-      const res = await fetch(`${API_URL}/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode, name, price, stock, tags })
-      });
+      let res;
+      
+      // DECISIÓN: ¿Estamos Editando o Creando?
+      if (productoEnEdicionId) {
+          // --- MODO EDICIÓN (PUT) ---
+          // Nota: No enviamos el barcode porque dijiste que no cambia
+          res = await fetch(`${API_URL}/products/${productoEnEdicionId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, price, stock, tags })
+          });
+      } else {
+          // --- MODO CREAR (POST) ---
+          res = await fetch(`${API_URL}/products`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode, name, price, stock, tags })
+          });
+      }
 
       if (res.ok) {
-        alert('Producto guardado en la nube ☁️');
+        alert(productoEnEdicionId ? '✅ Producto actualizado' : '✅ Producto guardado');
         fetchProducts();
-        barcodeInput.value = ''; nameInput.value = ''; priceInput.value = ''; 
-        stockInput.value = ''; tagsInput.value = '';
+        
+        // LIMPIEZA TOTAL
+        barcodeInput.value = ''; 
+        nameInput.value = ''; 
+        priceInput.value = ''; 
+        stockInput.value = ''; 
+        tagsInput.value = '';
+        
+        // Restaurar estado original
+        productoEnEdicionId = null;
+        barcodeInput.disabled = false; // Desbloquear barcode
+        barcodeInput.classList.remove('bg-gray-200');
+        btnGuardar.textContent = 'Guardar'; // Regresar texto original
+        
       } else {
-          alert('Error al guardar. Código de barras duplicado.');
+          const errorData = await res.json();
+          alert('Error: ' + (errorData.message || 'No se pudo guardar'));
       }
   } catch (error) {
       console.error(error);
       alert('Error de conexión');
+  } finally {
+      btnGuardar.disabled = false;
   }
 });
 
