@@ -116,58 +116,77 @@ async function fetchPartners() {
 // ====================
 // 1. VISTA TARJETAS (POS) - CON CLIC
 // ====================
+// ====================
+// 1. VISTA TARJETAS (POS) - CON SEMÁFORO DE STOCK 🚦
+// ====================
 function renderProducts(products) {
   if (!productsDiv) return;
   productsDiv.innerHTML = '';
   
   products.forEach(p => {
     const card = document.createElement('div');
-    // Agregamos cursor-pointer para que parezca botón y un efecto al pasar el mouse
-    card.className = 'bg-white p-4 rounded shadow hover:shadow-lg transition cursor-pointer border border-transparent hover:border-pink-300';
+    
+    // --- LÓGICA DEL SEMÁFORO ---
+    let bordeColor = 'border-transparent';
+    let estadoStock = '';
+    let opacidad = 'opacity-100';
+    let clickeable = true;
+
+    // 1. Stock Crítico (1 a 5 unidades)
+    if (p.stock > 0 && p.stock <= 5) {
+        bordeColor = 'border-orange-400 bg-orange-50'; // Fondo naranjita
+        estadoStock = '<span class="text-orange-600 font-bold text-xs animate-pulse">¡POCO STOCK!</span>';
+    } 
+    // 2. Agotado (0 o menos)
+    else if (p.stock <= 0) {
+        bordeColor = 'border-gray-200 bg-gray-100';
+        opacidad = 'opacity-60'; // Se ve borroso
+        estadoStock = '<span class="text-red-600 font-bold text-xs">AGOTADO</span>';
+        clickeable = false;
+    }
+
+    // Clases base + dinámicas
+    card.className = `p-4 rounded shadow hover:shadow-lg transition cursor-pointer border-2 ${bordeColor} ${opacidad} relative overflow-hidden`;
     
     card.innerHTML = `
-      <h3 class="font-bold text-lg text-gray-800">${p.name}</h3>
-      <div class="flex justify-between items-center mt-2">
+      <div class="flex justify-between items-start">
+          <h3 class="font-bold text-lg text-gray-800 leading-tight">${p.name}</h3>
+          ${estadoStock}
+      </div>
+      
+      <div class="flex justify-between items-center mt-3">
           <p class="text-pink-600 font-bold text-xl">${formatMoney(p.price)}</p>
-          <p class="text-xs text-gray-500 font-medium">Stock: ${p.stock}</p>
+          <p class="text-sm text-gray-600 font-medium">Stock: ${p.stock}</p>
       </div>
     `;
 
-    // 🔥 ESTA ES LA MAGIA: Al hacer clic, agrega al carrito
-    // ... dentro de renderProducts ...
-    
-    // 🔥 LÓGICA MÁGICA DE GRANEL
-    card.onclick = () => {
-        const inputGranel = document.getElementById('bulkMoneyInput');
-        const dineroCliente = parseFloat(inputGranel.value); // Ej: 9 pesos
+    // Solo permitimos clic si hay stock
+    if (clickeable) {
+        card.onclick = () => {
+            const inputGranel = document.getElementById('bulkMoneyInput');
+            const dineroCliente = inputGranel ? parseFloat(inputGranel.value) : 0;
+            let cantidadAgregar = 1;
 
-        let cantidadAgregar = 1; // Por defecto es 1 pieza/kilo
+            if (dineroCliente > 0) {
+                cantidadAgregar = dineroCliente / p.price;
+                if(inputGranel) inputGranel.value = ''; 
+            }
 
-        // Si escribieron dinero (ej: 9) y el producto vale (ej: 36)
-        if (dineroCliente > 0) {
-            // Regla de 3:  (9 / 36) = 0.25 kg
-            cantidadAgregar = dineroCliente / p.price;
-            
-            // Limpiamos el input para que la siguiente venta no sea a granel por error
-            inputGranel.value = ''; 
-        }
+            // Validar stock antes de agregar
+            addToCart(p, cantidadAgregar);
 
-        // Enviamos la cantidad calculada al carrito
-        if (p.stock > 0) {
-            addToCart(p, cantidadAgregar); // <--- OJO AQUÍ, pasamos la cantidad
-            
-            // Efecto visual
-            card.style.backgroundColor = '#dcfce7';
-            setTimeout(() => card.style.backgroundColor = 'white', 150);
-        } else {
-            alert('⚠️ Producto agotado');
-        }
-    };
+            // Efecto visual al clic
+            card.style.transform = "scale(0.95)";
+            setTimeout(() => card.style.transform = "scale(1)", 100);
+        };
+    } else {
+        // Si está agotado, cursor de prohibido
+        card.style.cursor = 'not-allowed';
+    }
 
     productsDiv.appendChild(card);
   });
 }
-
 // 2. VISTA LISTA (ADMIN - CON BOTÓN EDITAR)
 function renderProductAdmin(products) {
   if (!productList) return;
@@ -424,20 +443,14 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT (COBRAR)
+// CHECKOUT
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
   const total = getTotal();
   const cash = Number(cashInput.value);
-  
-  // Validación básica
-  if (cash < total && cash !== 0) { // Permitimos 0 si es crédito o exacto, pero idealmente validamos
-      alert('❌ Pago insuficiente'); 
-      return; 
-  }
+  if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
-  // Preparamos datos para el backend
   const products = cart.map(item => ({ 
       product: item._id, 
       quantity: item.qty,
@@ -456,31 +469,22 @@ checkoutBtn.addEventListener('click', async () => {
       });
 
       if(res.ok) {
-          // 1. Calculamos el cambio antes de borrar todo
-          const cambio = cash > 0 ? cash - total : 0;
-
-          // 2. 🖨️ IMPRIMIR TICKET (La función nueva)
-          imprimirTicket(cart, total, cash, cambio);
-
-          // 3. Limpieza
+          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash - total)}`);
           cart = [];
           cashInput.value = '';
           changeSpan.textContent = formatMoney(0);
           renderCart();
-          fetchProducts(); // Para actualizar stock visualmente
-          
+          fetchProducts(); 
       } else {
           const errorData = await res.json();
           alert('Error: ' + errorData.message);
       }
   } catch (error) {
-      console.error(error);
       alert('Error de conexión');
   }
 });
 
-// ====================
-// 🖨️ FUNCIÓN IMPRIMIR TICKET
+
 // ====================
 function imprimirTicket(productos, total, efectivo, cambio) {
     // Creamos una ventana nueva en blanco
