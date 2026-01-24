@@ -11,7 +11,6 @@ let cart = [];
 // ====================
 // ELEMENTOS DEL DOM
 // ====================
-// Inputs y Tablas
 const barcodeInput = document.getElementById('barcodeInput');
 const productsDiv = document.getElementById('products');
 const productList = document.getElementById('productList');
@@ -47,7 +46,7 @@ const partnerName = document.getElementById('partnerName');
 const partnerTag = document.getElementById('partnerTag');
 const addPartnerBtn = document.getElementById('addPartner');
 
-// Elementos de Reportes (NUEVO)
+// Elementos de Reportes
 const btnReporteDia = document.getElementById('btnReporteDia');
 const resultadoDia = document.getElementById('resultadoDia');
 const btnReporteRango = document.getElementById('btnReporteRango');
@@ -75,12 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPartners();
 });
 
-// Función para traer productos
 async function fetchProducts() {
     try {
         const res = await fetch(`${API_URL}/products`);
         if (!res.ok) throw new Error('Error cargando productos');
         allProducts = await res.json();
+        // Aseguramos que los precios sean números
+        allProducts = allProducts.map(p => ({...p, price: Number(p.price)}));
+        
         renderProducts(allProducts);
         renderProductAdmin(allProducts);
     } catch (error) {
@@ -89,7 +90,6 @@ async function fetchProducts() {
     }
 }
 
-// Función para traer socios
 async function fetchPartners() {
     try {
         const res = await fetch(`${API_URL}/partners`);
@@ -137,7 +137,6 @@ function renderProductAdmin(products) {
       </div>
     `;
 
-    // ELIMINAR
     div.querySelector('.delete').onclick = async () => {
       if (!confirm(`Eliminar ${p.name}?`)) return;
       try {
@@ -152,7 +151,7 @@ function renderProductAdmin(products) {
 }
 
 // ====================
-// LOGICA DE CARRITO
+// LOGICA DE CARRITO Y CAJA
 // ====================
 function renderCart() {
   cartTable.innerHTML = '';
@@ -164,7 +163,7 @@ function renderCart() {
 
   let total = 0;
   cart.forEach((item, index) => {
-    const subtotal = item.price * item.qty;
+    const subtotal = Number(item.price) * Number(item.qty);
     total += subtotal;
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -199,15 +198,15 @@ function addToCart(producto) {
       if(item.qty + 1 > producto.stock) { alert('Stock insuficiente'); return; }
     item.qty++;
   } else {
-    cart.push({ _id: producto._id, name: producto.name, price: producto.price, qty: 1 });
+    cart.push({ _id: producto._id, name: producto.name, price: Number(producto.price), qty: 1 });
   }
   renderCart();
 }
 
-function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
+function getTotal() { return cart.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0); }
 
 // ====================
-// GUARDAR PRODUCTO (NUEVO)
+// GUARDAR PRODUCTO
 // ====================
 document.getElementById('addProduct')?.addEventListener('click', async () => {
   const barcode = barcodeInput.value.trim();
@@ -231,7 +230,6 @@ document.getElementById('addProduct')?.addEventListener('click', async () => {
       if (res.ok) {
         alert('Producto guardado en la nube ☁️');
         fetchProducts();
-        // Limpiar
         barcodeInput.value = ''; nameInput.value = ''; priceInput.value = ''; 
         stockInput.value = ''; tagsInput.value = '';
       } else {
@@ -244,7 +242,7 @@ document.getElementById('addProduct')?.addEventListener('click', async () => {
 });
 
 // ====================
-// GUARDAR SOCIO
+// SOCIOS
 // ====================
 function renderPartners(partners) {
   partnerList.innerHTML = '';
@@ -277,9 +275,7 @@ addPartnerBtn?.addEventListener('click', async () => {
         body: JSON.stringify({ name, tag })
     });
     if(res.ok) {
-        partnerName.value = '';
-        partnerTag.value = '';
-        fetchPartners();
+        partnerName.value = ''; partnerTag.value = ''; fetchPartners();
     } else {
         alert('Error al guardar socio');
     }
@@ -297,44 +293,52 @@ btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove(
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// CAJA Y BÚSQUEDA
-// ====================
-// ====================
-// 🔍 BÚSQUEDA (MEJORADA)
+// BÚSQUEDA Y ESCÁNER (CORREGIDO 🔧)
 // ====================
 searchInput?.addEventListener('input', e => {
   const texto = e.target.value.trim().toLowerCase();
+  if (!texto) { renderProducts(allProducts); return; }
 
-  // 1. Si está vacío, mostrar todo
-  if (!texto) { 
-    renderProducts(allProducts); 
-    return; 
-  }
-
-  // 2. Filtrar
   const filtrados = allProducts.filter(p => {
-    // Protección: Asegurar que existan los datos antes de convertir a minúsculas
     const nombre = p.name ? p.name.toLowerCase() : '';
-    const codigo = p.barcode ? p.barcode.toLowerCase() : '';
+    const codigo = p.barcode ? String(p.barcode).toLowerCase() : ''; // Convertimos a String por si acaso
     
-    // Buscar por Nombre O por Código de Barras
     if (nombre.includes(texto) || codigo.includes(texto)) return true;
-
-    // Buscar por Tags (ej: #m para maría)
     if (p.tags && Array.isArray(p.tags)) {
-        // Buscamos si ALGUNO de los tags incluye el texto
         return p.tags.some(tag => tag.toLowerCase().includes(texto));
     }
-
     return false;
   });
-
-  // 3. Pintar resultados
   renderProducts(filtrados);
 });
 
+// ESCÁNER POS (AQUÍ ESTABA EL ERROR DEL ESCÁNER)
+barcodeInputPOS?.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  
+  const codigo = barcodeInputPOS.value.trim();
+  
+  // 🔥 CORRECCIÓN: Convertimos p.barcode a String antes de comparar
+  // Esto arregla el problema de "Número vs Texto"
+  const producto = allProducts.find(p => String(p.barcode).trim() === codigo);
+  
+  if (!producto) { alert('❌ No encontrado'); barcodeInputPOS.value = ''; return; }
+  if (producto.stock <= 0) { alert('⚠️ Sin stock'); return; }
+
+  addToCart(producto);
+  barcodeInputPOS.value = '';
+});
+
+cashInput.addEventListener('input', () => {
+  const total = getTotal();
+  const cash = Number(cashInput.value);
+  if (isNaN(cash) || cash < total) { changeSpan.textContent = formatMoney(0); return; }
+  changeSpan.textContent = formatMoney(cash - total);
+});
+
 // ====================
-// CHECKOUT (VENTA)
+// CHECKOUT
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
@@ -357,7 +361,7 @@ checkoutBtn.addEventListener('click', async () => {
           cashInput.value = '';
           changeSpan.textContent = formatMoney(0);
           renderCart();
-          fetchProducts(); // Actualizar stock
+          fetchProducts(); 
       } else {
           alert('Error al guardar venta');
       }
@@ -367,10 +371,9 @@ checkoutBtn.addEventListener('click', async () => {
 });
 
 // ====================
-// 📊 REPORTES (LÓGICA NUEVA)
+// 📊 REPORTES (CORREGIDO 🔧)
 // ====================
 
-// --- REPORTE DEL DÍA (HOY) ---
 btnReporteDia?.addEventListener('click', async () => {
     resultadoDia.classList.remove('hidden');
     resultadoDia.innerHTML = '<p class="text-gray-500 animate-pulse">Cargando ventas...</p>';
@@ -380,14 +383,8 @@ btnReporteDia?.addEventListener('click', async () => {
         if (!res.ok) throw new Error('Error al obtener ventas');
         const ventas = await res.json();
         
-        // Fecha de HOY (Formato YYYY-MM-DD local)
         const hoy = new Date().toLocaleDateString('en-CA'); 
-
-        // Filtramos ventas de hoy
-        const ventasHoy = ventas.filter(venta => {
-            const fechaVenta = venta.createdAt.substring(0, 10);
-            return fechaVenta === hoy;
-        });
+        const ventasHoy = ventas.filter(venta => venta.createdAt.substring(0, 10) === hoy);
 
         mostrarResultados(ventasHoy, resultadoDia);
 
@@ -397,11 +394,9 @@ btnReporteDia?.addEventListener('click', async () => {
     }
 });
 
-// --- REPORTE POR RANGO ---
 btnReporteRango?.addEventListener('click', async () => {
     const inicio = startDateInput.value;
     const fin = endDateInput.value;
-
     if (!inicio || !fin) { alert('Selecciona ambas fechas'); return; }
 
     resultadoRango.classList.remove('hidden');
@@ -410,24 +405,20 @@ btnReporteRango?.addEventListener('click', async () => {
     try {
         const res = await fetch(`${API_URL}/sales`);
         const ventas = await res.json();
-
-        // Filtramos por rango
         const ventasRango = ventas.filter(venta => {
-            const fechaVenta = venta.createdAt.substring(0, 10);
-            return fechaVenta >= inicio && fechaVenta <= fin;
+            const f = venta.createdAt.substring(0, 10);
+            return f >= inicio && f <= fin;
         });
-
         mostrarResultados(ventasRango, resultadoRango);
     } catch (error) {
         resultadoRango.innerHTML = '<p class="text-red-500">Error al cargar datos.</p>';
     }
 });
 
-// --- CÁLCULO DE TOTALES POR SOCIO ---
-// --- CÁLCULO DE TOTALES POR SOCIO (VERSIÓN CORREGIDA) ---
+// --- CÁLCULO DE TOTALES (LÓGICA BLINDADA) ---
 function mostrarResultados(listaVentas, contenedorDiv) {
     if (listaVentas.length === 0) {
-        contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hubo ventas en este periodo.</p>';
+        contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hubo ventas.</p>';
         return;
     }
 
@@ -435,99 +426,74 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     const porSocio = {}; 
 
     listaVentas.forEach(v => {
-        totalGeneral += v.total;
+        totalGeneral += Number(v.total);
         
         v.products.forEach(item => {
-            // ✅ CORRECCIÓN IMPORTANTE:
-            // Convertimos los IDs a texto (String) para asegurar que se encuentren
-            const productoInfo = allProducts.find(p => String(p._id) === String(item.product)); 
+            // 🔥 CORRECCIÓN: Extraemos el ID ya sea que venga como objeto o como string
+            const idProductoVendido = item.product._id || item.product;
+
+            // Buscamos el producto en la lista local
+            const productoInfo = allProducts.find(p => String(p._id) === String(idProductoVendido)); 
             
             let precio = 0;
             let tags = [];
 
             if (productoInfo) {
-                precio = productoInfo.price;
+                precio = Number(productoInfo.price);
                 tags = productoInfo.tags || [];
             } else {
-                // Si el producto fue borrado de la base de datos, sale aquí
-                console.warn("Producto antiguo/borrado:", item.product);
+                // Producto borrado o no encontrado
             }
 
             const subtotal = precio * item.quantity;
 
-            // Lógica para asignar al socio correcto
             if (productoInfo && tags.length > 0) {
                 const tagSocio = tags[0].toUpperCase(); 
-
-                if (porSocio[tagSocio]) {
-                    porSocio[tagSocio] += subtotal;
-                } else {
-                    porSocio[tagSocio] = subtotal;
-                }
+                porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
             } else {
-                // Si no tiene tag o no se encontró el producto, va a GENERAL
-                if (!porSocio['GENERAL']) porSocio['GENERAL'] = 0;
-                porSocio['GENERAL'] += subtotal;
+                porSocio['GENERAL'] = (porSocio['GENERAL'] || 0) + subtotal;
             }
         });
     });
 
-    // Construir HTML
     let html = `
         <div class="flex justify-between items-center border-b pb-2 mb-2">
-            <span class="text-lg font-bold text-gray-700">TOTAL VENTAS:</span>
+            <span class="text-lg font-bold text-gray-700">TOTAL:</span>
             <span class="text-2xl font-bold text-green-600">${formatMoney(totalGeneral)}</span>
         </div>
         <div class="text-sm text-gray-600 space-y-1">
-            <p class="font-bold mb-1">Desglose estimado por Socio:</p>
+            <p class="font-bold mb-1">Desglose:</p>
     `;
 
-    // Generar la lista de socios
     let sumaDesglosada = 0;
     for (const [tag, monto] of Object.entries(porSocio)) {
         sumaDesglosada += monto;
-        html += `
-            <div class="flex justify-between">
-                <span class="uppercase">👤 ${tag}</span>
-                <span class="font-medium">${formatMoney(monto)}</span>
-            </div>
-        `;
+        html += `<div class="flex justify-between"><span class="uppercase">👤 ${tag}</span><span class="font-medium">${formatMoney(monto)}</span></div>`;
     }
 
-    // Mostrar diferencia si hay productos borrados (opcional)
     if (totalGeneral > sumaDesglosada) {
-        const diferencia = totalGeneral - sumaDesglosada;
-         html += `
-            <div class="flex justify-between text-orange-500">
-                <span class="uppercase">⚠️ Prod. Borrados</span>
-                <span class="font-medium">${formatMoney(diferencia)}</span>
-            </div>
-        `;
+         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Prod. Borrados</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
     }
 
     html += `</div>`;
     contenedorDiv.innerHTML = html;
 }
-// ====================
-// EXPORTAR A EXCEL (CSV)
-// ====================
+
 window.exportarExcel = async function() {
     try {
         const res = await fetch(`${API_URL}/sales`);
         if (!res.ok) throw new Error('Error al bajar historial');
         const ventas = await res.json();
-
-        if (ventas.length === 0) { alert('No hay ventas para exportar'); return; }
+        if (ventas.length === 0) { alert('No hay ventas'); return; }
 
         let csv = 'Fecha,Total,Detalle\n';
         ventas.forEach(v => {
             const fecha = v.createdAt.substring(0, 10);
-            // Creamos un resumen simple de productos
             const detalle = v.products.map(p => {
-               const info = allProducts.find(prod => prod._id === p.product);
-               return info ? `${info.name} (${p.quantity})` : 'Producto borrado';
+               const idProd = p.product._id || p.product;
+               const info = allProducts.find(prod => String(prod._id) === String(idProd));
+               return info ? `${info.name} (${p.quantity})` : 'Borrado';
             }).join(' | ');
-            
             csv += `${fecha},${v.total},"${detalle}"\n`;
         });
 
@@ -535,7 +501,7 @@ window.exportarExcel = async function() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `Reporte_Ventas_${new Date().toLocaleDateString('en-CA')}.csv`;
+        link.download = `Ventas_${new Date().toLocaleDateString('en-CA')}.csv`;
         link.click();
     } catch (error) {
         alert('Error al generar Excel');
