@@ -113,19 +113,38 @@ async function fetchPartners() {
 // ====================
 
 // 1. VISTA TARJETAS (POS)
+// ====================
+// 1. VISTA TARJETAS (POS) - CON CLIC
+// ====================
 function renderProducts(products) {
   if (!productsDiv) return;
   productsDiv.innerHTML = '';
+  
   products.forEach(p => {
     const card = document.createElement('div');
-    card.className = 'bg-white p-4 rounded shadow hover:shadow-lg transition';
+    // Agregamos cursor-pointer para que parezca botón y un efecto al pasar el mouse
+    card.className = 'bg-white p-4 rounded shadow hover:shadow-lg transition cursor-pointer border border-transparent hover:border-pink-300';
+    
     card.innerHTML = `
-      <h3 class="font-bold text-lg">${p.name}</h3>
+      <h3 class="font-bold text-lg text-gray-800">${p.name}</h3>
       <div class="flex justify-between items-center mt-2">
-          <p class="text-pink-600 font-bold">${formatMoney(p.price)}</p>
-          <p class="text-xs text-gray-500">Stock: ${p.stock}</p>
+          <p class="text-pink-600 font-bold text-xl">${formatMoney(p.price)}</p>
+          <p class="text-xs text-gray-500 font-medium">Stock: ${p.stock}</p>
       </div>
     `;
+
+    // 🔥 ESTA ES LA MAGIA: Al hacer clic, agrega al carrito
+    card.onclick = () => {
+        if (p.stock > 0) {
+            addToCart(p);
+            // Efecto visual opcional: parpadeo verde
+            card.style.backgroundColor = '#dcfce7'; // Verde claro
+            setTimeout(() => card.style.backgroundColor = 'white', 150);
+        } else {
+            alert('⚠️ Producto agotado');
+        }
+    };
+
     productsDiv.appendChild(card);
   });
 }
