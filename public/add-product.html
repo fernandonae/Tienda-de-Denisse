@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Agregar Producto</title>
+</head>
+<body>
+  <h1>Nuevo Producto</h1>
+
+  <form id="productForm">
+    <input type="text" placeholder="Nombre" id="name" required />
+    <input type="number" placeholder="Precio" id="price" required />
+    <input type="number" placeholder="Stock" id="stock" required />
+    <button type="submit">Guardar</button>
+  </form>
+
+  <script>
+    document.getElementById('productForm').addEventListener('submit', async e => {
+      e.preventDefault();
+
+      const product = {
+        name: name.value,
+        price: price.value,
+        stock: stock.value
+      };
+
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product)
+      });
+
+      if (res.ok) {
+        alert('Producto guardado');
+        window.location.href = '/';
+      } else {
+        alert('Error al guardar');
+      }
+    });
+  </script>
+</body>
+</html>

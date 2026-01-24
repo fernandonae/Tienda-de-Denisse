@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Punto de Venta</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-pink-50 min-h-screen flex flex-col">
+
+  <!-- ===== MENU ===== -->
+  <nav class="bg-pink-600 text-white px-8 py-4 flex gap-8 shadow">
+    <button id="btnPOS" class="font-bold text-lg">POS</button>
+    <button id="btnProducts" class="opacity-80 hover:opacity-100">Productos</button>
+    <button id="btnReports" class="opacity-80 hover:opacity-100">Reportes</button>
+    <button id="btnPartners">Socios</button>
+
+  </nav>
+
+  <!-- ===== CONTENEDOR ===== -->
+  <main class="flex-1 p-6">
+
+    <!-- ================= POS ================= -->
+    <section id="posSection"
+      class="bg-white rounded-2xl shadow-lg grid grid-cols-3 overflow-hidden h-full">
+
+      <!-- IZQUIERDA -->
+      <div class="col-span-2 p-6 border-r">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+          Productos
+        </h2>
+
+        <input
+          id="search"
+          type="text"
+          placeholder="Buscar producto..."
+          class="w-full p-4 rounded-lg border border-pink-300 focus:ring-2 focus:ring-pink-400 outline-none mb-4"
+        />
+
+        <input
+        id="barcodeInputPOS"
+        type="text"
+        placeholder="Escanea el código de barras"
+        class="w-full p-4 rounded-lg border-2 border-pink-400 focus:ring-2 focus:ring-pink-500 outline-none"
+        />
+
+      </div>
+
+      <!-- DERECHA -->
+      <div class="p-6 flex flex-col">
+        <h2 class="text-2xl font-bold text-pink-600 mb-4">🧾 Ticket</h2>
+
+        <div class="flex-1 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b text-gray-600">
+                <th class="py-2 text-left">Producto</th>
+                <th class="py-2 text-right">Precio</th>
+                <th class="py-2 text-center">Cant</th>
+                <th class="py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="cartTable">
+              <tr class="text-center text-gray-400">
+                <td colspan="4" class="py-6">
+                  Sin productos
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 flex justify-between text-xl font-bold">
+          <span>Total</span>
+          <span class="text-pink-600"><span id="total">0</span></span>
+        </div>
+
+        <div class="mt-4 space-y-2">
+        <label class="text-sm text-gray-600">Paga con:</label>
+        <input
+        id="cashInput"
+        type="number"
+        min="0"
+        placeholder="0.00"
+        class="w-full border rounded-lg px-3 py-2 text-right"
+        />
+
+      <div class="flex justify-between text-lg font-bold">
+      <span>Cambio:</span>
+     <span id="changeSpan">$0.00</span>
+     </div>
+</div>
+
+
+        <button id="checkoutBtn"
+          class="mt-4 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-xl text-lg">
+          COBRAR
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= PRODUCTOS ================= -->
+    <div id="productsSection" class="hidden p-6">
+
+    <div class="grid grid-cols-2 gap-6">
+
+      <!-- FORM -->
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h2 class="text-lg font-bold mb-3">Agregar producto</h2>
+         <input
+  id="barcodeInput"
+  type="text"
+  placeholder="Escanea el código de barras"
+  class="w-full mb-2 p-2 border-2 border-pink-400 rounded focus:ring-2 focus:ring-pink-500"
+  autocomplete="off"
+/>
+
+<input id="nameInput" placeholder="Nombre" class="w-full mb-2 p-2 border rounded" />
+<input id="priceInput" type="number" placeholder="Precio" class="w-full mb-2 p-2 border rounded" />
+<input id="stockInput" type="number" placeholder="Stock" class="w-full mb-2 p-2 border rounded" />
+<input id="tagsInput" placeholder="Tags opcionales (m,p)" class="w-full mb-3 p-2 border rounded" />
+
+<button id="addProduct" class="bg-pink-600 text-white w-full py-2 rounded">
+  Guardar
+</button>
+      </div>
+
+      <!-- LISTA -->
+      <div>
+        <h2 class="text-lg font-bold mb-3">Productos</h2>
+        <div id="productList" class="space-y-3"></div>
+      </div>
+
+    </div>
+  </div>
+
+    </section>
+
+    <!-- ================= REPORTES ================= -->
+    <section id="reportsSection" class="hidden">
+
+      <h2 class="text-3xl font-bold mb-6">Reportes</h2>
+
+      <!-- POR DÍA -->
+      <div class="bg-white rounded-2xl shadow p-6 mb-6 max-w-xl">
+        <h3 class="text-xl font-bold mb-4 text-pink-600">
+          Reporte por día
+        </h3>
+
+        <div class="flex gap-4 mb-4">
+          <input type="date" id="dayDate" class="p-3 border rounded w-full">
+          <button id="dayReport"
+            class="bg-pink-600 text-white px-6 rounded">
+            Ver
+          </button>
+        </div>
+
+        <div class="space-y-1 text-gray-700">
+          <p>Total: <strong id="dayTotal">$0</strong></p>
+          <p>María: <strong id="dayMaria">$0</strong></p>
+          <p>Otro socio: <strong id="dayOtro">$0</strong></p>
+        </div>
+      </div>
+
+    
+
+      <!-- POR FECHAS -->
+      <div class="bg-white rounded-2xl shadow p-6 max-w-xl">
+        <h3 class="text-xl font-bold mb-4 text-pink-600">
+          Reporte por rango
+        </h3>
+
+        <div class="flex gap-4 mb-4">
+          <input type="date" id="startDate" class="p-3 border rounded w-full">
+          <input type="date" id="endDate" class="p-3 border rounded w-full">
+          <button id="rangeReport"
+            class="bg-pink-600 text-white px-6 rounded">
+            Ver
+          </button>
+        </div>
+
+        <div class="space-y-1 text-gray-700">
+          <p>Total: <strong id="rangeTotal">$0</strong></p>
+          <p>María: <strong id="rangeMaria">$0</strong></p>
+          <p>Otro socio: <strong id="rangeOtro">$0</strong></p>
+        </div>
+      </div>
+
+      <button onclick="exportarExcel()"
+        class="bg-green-600 text-white px-6 py-3 rounded-xl">
+           Exportar a Excel
+           </button>
+
+
+   </section>
+   
+
+    <!-- ===== SECCIÓN SOCIOS ===== -->
+<div id="partnersSection" class="hidden w-full p-6">
+
+  <div class="max-w-md bg-white p-4 rounded shadow mb-6">
+    <h2 class="text-xl font-bold mb-3">Agregar socio</h2>
+
+    <input id="partnerName"
+      type="text"
+      placeholder="Nombre del socio"
+      class="w-full p-2 border rounded mb-2" />
+
+    <input id="partnerTag"
+      type="text"
+      placeholder="Tag (ej: m, p)"
+      class="w-full p-2 border rounded mb-2" />
+
+    <button id="addPartner"
+      class="w-full bg-pink-600 text-white py-2 rounded">
+      Guardar socio
+    </button>
+  </div>
+
+  <h3 class="text-lg font-bold mb-2">Socios registrados</h3>
+  <div id="partnerList" class="space-y-2"></div>
+
+</div>
+
+
+
+  </main>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

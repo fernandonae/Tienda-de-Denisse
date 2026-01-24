@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Prueba Exportar Excel</title>
+</head>
+<body>
+
+  <h1>Reporte de prueba</h1>
+
+  <button onclick="exportar()">Exportar a Excel</button>
+
+  <script>
+    function exportar() {
+      // DATOS DE PRUEBA
+      const partnerTotals = [
+        { name: 'María', total: 12500 },
+        { name: 'Pedro', total: 8200 },
+        { name: 'Luis', total: 4300 }
+      ];
+
+      const totalGeneral = 12500 + 8200 + 4300;
+
+      let csv = 'Socio,Total\n';
+
+      partnerTotals.forEach(p => {
+        csv += `${p.name},${p.total}\n`;
+      });
+
+      csv += `TOTAL GENERAL,${totalGeneral}\n`;
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'reporte_prueba.csv';
+      link.click();
+
+      URL.revokeObjectURL(url);
+    }
+  </script>
+
+</body>
+</html>
