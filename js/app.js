@@ -198,7 +198,13 @@ function addToCart(producto) {
       if(item.qty + 1 > producto.stock) { alert('Stock insuficiente'); return; }
     item.qty++;
   } else {
-    cart.push({ _id: producto._id, name: producto.name, price: Number(producto.price), qty: 1 });
+    // IMPORTANTE: Aseguramos que price sea número
+    cart.push({ 
+        _id: producto._id, 
+        name: producto.name, 
+        price: Number(producto.price), 
+        qty: 1 
+    });
   }
   renderCart();
 }
@@ -293,7 +299,7 @@ btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove(
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// BÚSQUEDA Y ESCÁNER (CORREGIDO 🔧)
+// BÚSQUEDA Y ESCÁNER
 // ====================
 searchInput?.addEventListener('input', e => {
   const texto = e.target.value.trim().toLowerCase();
@@ -301,7 +307,7 @@ searchInput?.addEventListener('input', e => {
 
   const filtrados = allProducts.filter(p => {
     const nombre = p.name ? p.name.toLowerCase() : '';
-    const codigo = p.barcode ? String(p.barcode).toLowerCase() : ''; // Convertimos a String por si acaso
+    const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
     
     if (nombre.includes(texto) || codigo.includes(texto)) return true;
     if (p.tags && Array.isArray(p.tags)) {
@@ -312,15 +318,11 @@ searchInput?.addEventListener('input', e => {
   renderProducts(filtrados);
 });
 
-// ESCÁNER POS (AQUÍ ESTABA EL ERROR DEL ESCÁNER)
 barcodeInputPOS?.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   
   const codigo = barcodeInputPOS.value.trim();
-  
-  // 🔥 CORRECCIÓN: Convertimos p.barcode a String antes de comparar
-  // Esto arregla el problema de "Número vs Texto"
   const producto = allProducts.find(p => String(p.barcode).trim() === codigo);
   
   if (!producto) { alert('❌ No encontrado'); barcodeInputPOS.value = ''; return; }
@@ -338,7 +340,7 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT
+// CHECKOUT (CORREGIDO PARA TU SCHEMA)
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
@@ -346,13 +348,22 @@ checkoutBtn.addEventListener('click', async () => {
   const cash = Number(cashInput.value);
   if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
-  const products = cart.map(item => ({ product: item._id, quantity: item.qty }));
+  // 🔥 CORRECCIÓN: Agregamos 'price' al objeto porque tu Schema lo pide
+  const products = cart.map(item => ({ 
+      product: item._id, 
+      quantity: item.qty,
+      price: Number(item.price) // <--- ESTO FALTABA
+  }));
 
   try {
       const res = await fetch(`${API_URL}/sales`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products, paymentMethod: 'efectivo' })
+          body: JSON.stringify({ 
+              products, 
+              total: total, // Enviamos el total explícito
+              paymentMethod: 'efectivo' 
+          })
       });
 
       if(res.ok) {
@@ -363,7 +374,8 @@ checkoutBtn.addEventListener('click', async () => {
           renderCart();
           fetchProducts(); 
       } else {
-          alert('Error al guardar venta');
+          const errorData = await res.json();
+          alert('Error al guardar venta: ' + (errorData.message || 'Desconocido'));
       }
   } catch (error) {
       alert('Error de conexión');
@@ -371,7 +383,7 @@ checkoutBtn.addEventListener('click', async () => {
 });
 
 // ====================
-// 📊 REPORTES (CORREGIDO 🔧)
+// 📊 REPORTES (PROTEGIDO CONTRA ERRORES)
 // ====================
 
 btnReporteDia?.addEventListener('click', async () => {
@@ -384,13 +396,18 @@ btnReporteDia?.addEventListener('click', async () => {
         const ventas = await res.json();
         
         const hoy = new Date().toLocaleDateString('en-CA'); 
-        const ventasHoy = ventas.filter(venta => venta.createdAt.substring(0, 10) === hoy);
+        
+        // 🔥 FILTRO BLINDADO: Si no tiene fecha, lo ignoramos
+        const ventasHoy = ventas.filter(venta => {
+            if(!venta.createdAt) return false;
+            return venta.createdAt.substring(0, 10) === hoy;
+        });
 
         mostrarResultados(ventasHoy, resultadoDia);
 
     } catch (error) {
         console.error(error);
-        resultadoDia.innerHTML = '<p class="text-red-500">Error al cargar datos.</p>';
+        resultadoDia.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
     }
 });
 
@@ -405,17 +422,20 @@ btnReporteRango?.addEventListener('click', async () => {
     try {
         const res = await fetch(`${API_URL}/sales`);
         const ventas = await res.json();
+        
+        // 🔥 FILTRO BLINDADO
         const ventasRango = ventas.filter(venta => {
+            if(!venta.createdAt) return false;
             const f = venta.createdAt.substring(0, 10);
             return f >= inicio && f <= fin;
         });
+
         mostrarResultados(ventasRango, resultadoRango);
     } catch (error) {
-        resultadoRango.innerHTML = '<p class="text-red-500">Error al cargar datos.</p>';
+        resultadoRango.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
     }
 });
 
-// --- CÁLCULO DE TOTALES (LÓGICA BLINDADA) ---
 function mostrarResultados(listaVentas, contenedorDiv) {
     if (listaVentas.length === 0) {
         contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hubo ventas.</p>';
@@ -429,30 +449,24 @@ function mostrarResultados(listaVentas, contenedorDiv) {
         totalGeneral += Number(v.total);
         
         v.products.forEach(item => {
-            // 🔥 CORRECCIÓN: Extraemos el ID ya sea que venga como objeto o como string
-            const idProductoVendido = item.product._id || item.product;
-
-            // Buscamos el producto en la lista local
-            const productoInfo = allProducts.find(p => String(p._id) === String(idProductoVendido)); 
+            // Extraer ID
+            const idProd = item.product._id || item.product;
             
-            let precio = 0;
-            let tags = [];
-
-            if (productoInfo) {
-                precio = Number(productoInfo.price);
-                tags = productoInfo.tags || [];
-            } else {
-                // Producto borrado o no encontrado
-            }
+            // Buscar producto en memoria (forzando String)
+            const productoInfo = allProducts.find(p => String(p._id) === String(idProd)); 
+            
+            // Usamos el precio guardado en la venta (si existe) o el actual
+            let precio = item.price || 0; 
+            if(precio === 0 && productoInfo) precio = productoInfo.price;
 
             const subtotal = precio * item.quantity;
+            let tagSocio = 'GENERAL';
 
-            if (productoInfo && tags.length > 0) {
-                const tagSocio = tags[0].toUpperCase(); 
-                porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
-            } else {
-                porSocio['GENERAL'] = (porSocio['GENERAL'] || 0) + subtotal;
+            if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
+                tagSocio = productoInfo.tags[0].toUpperCase();
             }
+
+            porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
         });
     });
 
@@ -472,7 +486,7 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     }
 
     if (totalGeneral > sumaDesglosada) {
-         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Prod. Borrados</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
+         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Sin identificar</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
     }
 
     html += `</div>`;
@@ -488,7 +502,7 @@ window.exportarExcel = async function() {
 
         let csv = 'Fecha,Total,Detalle\n';
         ventas.forEach(v => {
-            const fecha = v.createdAt.substring(0, 10);
+            const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin fecha';
             const detalle = v.products.map(p => {
                const idProd = p.product._id || p.product;
                const info = allProducts.find(prod => String(prod._id) === String(idProd));
@@ -501,7 +515,7 @@ window.exportarExcel = async function() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `Ventas_${new Date().toLocaleDateString('en-CA')}.csv`;
+        link.download = `Ventas.csv`;
         link.click();
     } catch (error) {
         alert('Error al generar Excel');
