@@ -604,3 +604,40 @@ window.exportarExcel = async function() {
         alert('Error al generar Excel: ' + error.message);
     }
 };
+
+// ====================
+// 🔍 LÓGICA DEL BUSCADOR (AGREGAR AL FINAL)
+// ====================
+if (searchInput) {
+  searchInput.addEventListener('input', (e) => {
+    const texto = e.target.value.trim().toLowerCase();
+
+    // 1. Si el buscador está vacío, mostramos TODOS los productos
+    if (!texto) {
+      renderProducts(allProducts);      // Restaurar tarjetas POS
+      renderProductAdmin(allProducts);  // Restaurar lista Admin
+      return;
+    }
+
+    // 2. Filtramos la lista completa
+    const filtrados = allProducts.filter(p => {
+      // Protección: Si el dato no existe, usamos texto vacío '' para que no de error
+      const nombre = p.name ? p.name.toLowerCase() : '';
+      const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
+      
+      // A. Coincide con Nombre O Código
+      if (nombre.includes(texto) || codigo.includes(texto)) return true;
+
+      // B. Coincide con algún Tag (ej: "maria")
+      if (p.tags && Array.isArray(p.tags)) {
+          return p.tags.some(tag => tag.toLowerCase().includes(texto));
+      }
+
+      return false;
+    });
+
+    // 3. Pintamos los resultados filtrados en AMBAS secciones
+    renderProducts(filtrados);      // Actualiza la vista de ventas
+    renderProductAdmin(filtrados);  // Actualiza la vista de editar
+  });
+}
