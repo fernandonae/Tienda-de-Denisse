@@ -299,35 +299,38 @@ btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remov
 // ====================
 // CAJA Y BÚSQUEDA
 // ====================
+// ====================
+// 🔍 BÚSQUEDA (MEJORADA)
+// ====================
 searchInput?.addEventListener('input', e => {
-  const value = e.target.value.trim().toLowerCase();
-  if (!value) { renderProducts(allProducts); return; }
-  if (value.startsWith('#')) {
-    const tag = value.slice(1);
-    renderProducts(allProducts.filter(p => p.tags?.includes(tag)));
-  } else {
-    renderProducts(allProducts.filter(p => p.name.toLowerCase().includes(value)));
+  const texto = e.target.value.trim().toLowerCase();
+
+  // 1. Si está vacío, mostrar todo
+  if (!texto) { 
+    renderProducts(allProducts); 
+    return; 
   }
-});
 
-barcodeInputPOS?.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  const codigo = barcodeInputPOS.value.trim();
-  const producto = allProducts.find(p => p.barcode === codigo);
-  
-  if (!producto) { alert('❌ No encontrado'); barcodeInputPOS.value = ''; return; }
-  if (producto.stock <= 0) { alert('⚠️ Sin stock'); return; }
+  // 2. Filtrar
+  const filtrados = allProducts.filter(p => {
+    // Protección: Asegurar que existan los datos antes de convertir a minúsculas
+    const nombre = p.name ? p.name.toLowerCase() : '';
+    const codigo = p.barcode ? p.barcode.toLowerCase() : '';
+    
+    // Buscar por Nombre O por Código de Barras
+    if (nombre.includes(texto) || codigo.includes(texto)) return true;
 
-  addToCart(producto);
-  barcodeInputPOS.value = '';
-});
+    // Buscar por Tags (ej: #m para maría)
+    if (p.tags && Array.isArray(p.tags)) {
+        // Buscamos si ALGUNO de los tags incluye el texto
+        return p.tags.some(tag => tag.toLowerCase().includes(texto));
+    }
 
-cashInput.addEventListener('input', () => {
-  const total = getTotal();
-  const cash = Number(cashInput.value);
-  if (isNaN(cash) || cash < total) { changeSpan.textContent = formatMoney(0); return; }
-  changeSpan.textContent = formatMoney(cash - total);
+    return false;
+  });
+
+  // 3. Pintar resultados
+  renderProducts(filtrados);
 });
 
 // ====================
