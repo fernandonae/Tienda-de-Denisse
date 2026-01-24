@@ -1,12 +1,15 @@
 // ====================
-// VARIABLES GLOBALES (Cargadas desde LocalStorage)
+// 🌍 CONEXIÓN AL SERVIDOR (RENDER)
 // ====================
-let allProducts = JSON.parse(localStorage.getItem('misProductos')) || [];
-let allPartners = JSON.parse(localStorage.getItem('misSocios')) || [];
+// Esta es la dirección de tu nuevo servidor en la nube
+const API_URL = 'https://tienda-de-denisse.onrender.com/api'; 
+
+let allProducts = [];
+let allPartners = [];
 let cart = [];
 
 // ====================
-// ELEMENTOS DEL DOM
+// ELEMENTOS DEL DOM (Igual que antes)
 // ====================
 const barcodeInput = document.getElementById('barcodeInput');
 const productsDiv = document.getElementById('products');
@@ -42,8 +45,7 @@ const addPartnerBtn = document.getElementById('addPartner');
 // ====================
 // UTILIDADES
 // ====================
-const formatMoney = n =>
-  n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+const formatMoney = n => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const hideAllSections = () => {
   posSection?.classList.add('hidden');
@@ -52,23 +54,43 @@ const hideAllSections = () => {
   partnersSection?.classList.add('hidden');
 };
 
-const guardarEnStorage = () => {
-    localStorage.setItem('misProductos', JSON.stringify(allProducts));
-    localStorage.setItem('misSocios', JSON.stringify(allPartners));
-};
-
 // ====================
-// INICIALIZACIÓN
+// 🚀 CARGAR DATOS DESDE RENDER (Fetch)
 // ====================
-// Cargar datos al iniciar
 document.addEventListener('DOMContentLoaded', () => {
-    renderProducts(allProducts);
-    renderProductAdmin(allProducts);
-    renderPartners(allPartners);
+    fetchProducts();
+    fetchPartners();
 });
 
+// Función para traer productos de la nube
+async function fetchProducts() {
+    try {
+        const res = await fetch(`${API_URL}/products`);
+        if (!res.ok) throw new Error('Error cargando productos');
+        allProducts = await res.json();
+        renderProducts(allProducts);
+        renderProductAdmin(allProducts);
+    } catch (error) {
+        console.error(error);
+        alert('Error conectando con el servidor. Revisa tu internet.');
+    }
+}
+
+// Función para traer socios de la nube
+async function fetchPartners() {
+    try {
+        const res = await fetch(`${API_URL}/partners`);
+        if(res.ok) {
+            allPartners = await res.json();
+            renderPartners(allPartners);
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 // ====================
-// RENDER POS (Vista Vendedor)
+// RENDER POS
 // ====================
 function renderProducts(products) {
   if (!productsDiv) return;
@@ -86,7 +108,7 @@ function renderProducts(products) {
 }
 
 // ====================
-// RENDER ADMIN PRODUCTOS (Vista Inventario)
+// RENDER ADMIN
 // ====================
 function renderProductAdmin(products) {
   if (!productList) return;
@@ -101,37 +123,18 @@ function renderProductAdmin(products) {
         <p class="text-sm">${formatMoney(p.price)} | Stock: ${p.stock}</p>
       </div>
       <div class="flex gap-2">
-        <button class="edit bg-yellow-500 text-white px-2 py-1 rounded">Editar</button>
         <button class="delete bg-red-600 text-white px-2 py-1 rounded">Eliminar</button>
       </div>
     `;
 
-    // ELIMINAR (Sin fetch, directo al array)
-    div.querySelector('.delete').onclick = () => {
+    // ELIMINAR (Conectado a Render)
+    div.querySelector('.delete').onclick = async () => {
       if (!confirm(`Eliminar ${p.name}?`)) return;
-      allProducts = allProducts.filter(x => x._id !== p._id);
-      guardarEnStorage(); // Guardar cambios
-      renderProducts(allProducts);
-      renderProductAdmin(allProducts);
-    };
-
-    // EDITAR
-    div.querySelector('.edit').onclick = () => {
-      const name = prompt('Nombre', p.name);
-      const price = prompt('Precio', p.price);
-      const stock = prompt('Stock', p.stock);
-
-      if (!name || !price || !stock) return;
-
-      // Actualizar en el array
-      const index = allProducts.findIndex(x => x._id === p._id);
-      if(index !== -1){
-          allProducts[index].name = name;
-          allProducts[index].price = Number(price);
-          allProducts[index].stock = Number(stock);
-          guardarEnStorage(); // Guardar cambios
-          renderProducts(allProducts);
-          renderProductAdmin(allProducts);
+      try {
+          await fetch(`${API_URL}/products/${p._id}`, { method: 'DELETE' });
+          fetchProducts(); // Recargar lista
+      } catch (err) {
+          alert('Error al eliminar');
       }
     };
     productList.appendChild(div);
@@ -139,16 +142,12 @@ function renderProductAdmin(products) {
 }
 
 // ====================
-// CARRITO DE COMPRAS
+// CARRITO
 // ====================
 function renderCart() {
   cartTable.innerHTML = '';
   if (cart.length === 0) {
-    cartTable.innerHTML = `
-      <tr class="text-center text-gray-400">
-        <td colspan="4" class="py-6">Sin productos</td>
-      </tr>
-    `;
+    cartTable.innerHTML = `<tr class="text-center text-gray-400"><td colspan="4" class="py-6">Sin productos</td></tr>`;
     totalSpan.textContent = formatMoney(0);
     return;
   }
@@ -169,9 +168,7 @@ function renderCart() {
     `;
     cartTable.appendChild(tr);
   });
-
   totalSpan.textContent = formatMoney(total);
-  
   if (cashInput.value) {
     const cash = Number(cashInput.value);
     const totalCalc = getTotal();
@@ -180,26 +177,9 @@ function renderCart() {
 }
 
 // ====================
-// BUSCADOR
+// AGREGAR PRODUCTO (Hacia Render)
 // ====================
-searchInput?.addEventListener('input', e => {
-  const value = e.target.value.trim().toLowerCase();
-  if (!value) {
-    renderProducts(allProducts);
-    return;
-  }
-  if (value.startsWith('#')) {
-    const tag = value.slice(1);
-    renderProducts(allProducts.filter(p => p.tags?.includes(tag)));
-  } else {
-    renderProducts(allProducts.filter(p => p.name.toLowerCase().includes(value)));
-  }
-});
-
-// ====================
-// AGREGAR PRODUCTO (NUEVO - SIN FETCH)
-// ====================
-document.getElementById('addProduct')?.addEventListener('click', () => {
+document.getElementById('addProduct')?.addEventListener('click', async () => {
   const barcode = barcodeInput.value.trim();
   const name = nameInput.value.trim();
   const price = Number(priceInput.value);
@@ -211,33 +191,34 @@ document.getElementById('addProduct')?.addEventListener('click', () => {
     return;
   }
 
-  // Crear objeto producto
-  const newProduct = {
-      _id: Date.now(), // ID falso generado por tiempo
-      barcode,
-      name,
-      price,
-      stock,
-      tags
-  };
+  try {
+      const res = await fetch(`${API_URL}/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode, name, price, stock, tags })
+      });
 
-  allProducts.push(newProduct);
-  guardarEnStorage(); // GUARDAR EN LOCALSTORAGE
-  
-  renderProducts(allProducts);
-  renderProductAdmin(allProducts);
-
-  // Limpiar campos
-  barcodeInput.value = '';
-  nameInput.value = '';
-  priceInput.value = '';
-  stockInput.value = '';
-  tagsInput.value = '';
-  alert('Producto guardado correctamente');
+      if (res.ok) {
+        alert('Producto guardado en la nube ☁️');
+        fetchProducts(); // Recargar datos
+        
+        // Limpiar
+        barcodeInput.value = '';
+        nameInput.value = '';
+        priceInput.value = '';
+        stockInput.value = '';
+        tagsInput.value = '';
+      } else {
+          alert('Error al guardar. Revisa si el código de barras ya existe.');
+      }
+  } catch (error) {
+      console.error(error);
+      alert('Error de conexión');
+  }
 });
 
 // ====================
-// SOCIOS (SIN FETCH)
+// SOCIOS (Hacia Render)
 // ====================
 function renderPartners(partners) {
   partnerList.innerHTML = '';
@@ -245,68 +226,54 @@ function renderPartners(partners) {
     const div = document.createElement('div');
     div.className = 'bg-white p-3 rounded shadow flex justify-between';
     div.innerHTML = `
-      <div>
-        <strong>${p.name}</strong>
-        <span class="text-gray-500">#${p.tag}</span>
-      </div>
+      <div><strong>${p.name}</strong> <span class="text-gray-500">#${p.tag}</span></div>
       <button class="bg-red-600 text-white px-2 py-1 rounded delete-partner">Eliminar</button>
     `;
-    
-    div.querySelector('.delete-partner').onclick = () => {
+    div.querySelector('.delete-partner').onclick = async () => {
       if (!confirm(`Eliminar socio ${p.name}?`)) return;
-      allPartners = allPartners.filter(x => x._id !== p._id);
-      guardarEnStorage();
-      renderPartners(allPartners);
+      await fetch(`${API_URL}/partners/${p._id}`, { method: 'DELETE' });
+      fetchPartners();
     };
     partnerList.appendChild(div);
   });
 }
 
-addPartnerBtn?.addEventListener('click', () => {
+addPartnerBtn?.addEventListener('click', async () => {
   const name = partnerName.value.trim();
   const tag = partnerTag.value.trim().toLowerCase();
 
-  if (!name || !tag) {
-    alert('Completa los campos');
-    return;
-  }
+  if (!name || !tag) { alert('Completa los campos'); return; }
 
-  allPartners.push({ _id: Date.now(), name, tag });
-  guardarEnStorage();
+  await fetch(`${API_URL}/partners`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, tag })
+  });
   
   partnerName.value = '';
   partnerTag.value = '';
-  renderPartners(allPartners);
+  fetchPartners();
 });
 
 // ====================
-// MENU DE NAVEGACIÓN
+// MENÚ Y POS
 // ====================
 btnPOS.onclick = () => { hideAllSections(); posSection.classList.remove('hidden'); };
 btnProducts.onclick = () => { hideAllSections(); productsSection.classList.remove('hidden'); };
 btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove('hidden'); };
-btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); renderPartners(allPartners); };
+btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// LÓGICA DE COBRO (POS)
+// LOGICA DE CAJA
 // ====================
-barcodeInput?.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  const codigo = barcodeInput.value.trim();
-  if (!codigo) return;
-  
-  const producto = allProducts.find(p => p.barcode === codigo);
-  if (producto) {
-    nameInput.value = producto.name;
-    priceInput.value = producto.price;
-    stockInput.value = producto.stock;
-    tagsInput.value = (producto.tags || []).join(',');
-    alert(`✅ Producto encontrado: ${producto.name}`);
+searchInput?.addEventListener('input', e => {
+  const value = e.target.value.trim().toLowerCase();
+  if (!value) { renderProducts(allProducts); return; }
+  if (value.startsWith('#')) {
+    const tag = value.slice(1);
+    renderProducts(allProducts.filter(p => p.tags?.includes(tag)));
   } else {
-    alert('🆕 Producto nuevo, completa los datos');
-    nameInput.value = ''; priceInput.value = ''; stockInput.value = ''; tagsInput.value = '';
-    nameInput.focus();
+    renderProducts(allProducts.filter(p => p.name.toLowerCase().includes(value)));
   }
 });
 
@@ -314,20 +281,10 @@ barcodeInputPOS?.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   const codigo = barcodeInputPOS.value.trim();
-  if (!codigo) return;
-
   const producto = allProducts.find(p => p.barcode === codigo);
-  if (!producto) {
-    alert('❌ Producto no encontrado');
-    barcodeInputPOS.value = '';
-    return;
-  }
   
-  // Verificar stock antes de agregar
-  if (producto.stock <= 0) {
-      alert('⚠️ Sin stock');
-      return;
-  }
+  if (!producto) { alert('❌ No encontrado'); barcodeInputPOS.value = ''; return; }
+  if (producto.stock <= 0) { alert('⚠️ Sin stock'); return; }
 
   addToCart(producto);
   barcodeInputPOS.value = '';
@@ -335,22 +292,14 @@ barcodeInputPOS?.addEventListener('keydown', e => {
 
 function removeFromCart(index) {
   if (!cart[index]) return;
-  if (cart[index].qty > 1) {
-    cart[index].qty--;
-  } else {
-    cart.splice(index, 1);
-  }
+  cart[index].qty > 1 ? cart[index].qty-- : cart.splice(index, 1);
   renderCart();
 }
 
 function addToCart(producto) {
   const item = cart.find(p => p._id === producto._id);
   if (item) {
-      // Validar stock en carrito
-      if(item.qty + 1 > producto.stock) {
-          alert('No hay suficiente stock');
-          return;
-      }
+      if(item.qty + 1 > producto.stock) { alert('Stock insuficiente'); return; }
     item.qty++;
   } else {
     cart.push({ _id: producto._id, name: producto.name, price: producto.price, qty: 1 });
@@ -358,79 +307,44 @@ function addToCart(producto) {
   renderCart();
 }
 
-function getTotal() {
-  return cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-}
+function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 
 cashInput.addEventListener('input', () => {
   const total = getTotal();
   const cash = Number(cashInput.value);
-  if (isNaN(cash) || cash < total) {
-    changeSpan.textContent = formatMoney(0);
-    return;
-  }
+  if (isNaN(cash) || cash < total) { changeSpan.textContent = formatMoney(0); return; }
   changeSpan.textContent = formatMoney(cash - total);
 });
 
 // ====================
-// FINALIZAR VENTA (CHECKOUT)
+// FINALIZAR VENTA (Guardar en Render)
 // ====================
-checkoutBtn.addEventListener('click', () => {
-  if (cart.length === 0) {
-    alert('❌ No hay productos');
-    return;
-  }
+checkoutBtn.addEventListener('click', async () => {
+  if (cart.length === 0) return;
   const total = getTotal();
   const cash = Number(cashInput.value);
-  if (cash < total) {
-    alert('❌ El pago es insuficiente');
-    return;
-  }
+  if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
-  // DESCONTAR STOCK REALMENTE
-  cart.forEach(cartItem => {
-      const productIndex = allProducts.findIndex(p => p._id === cartItem._id);
-      if(productIndex !== -1) {
-          allProducts[productIndex].stock -= cartItem.qty;
+  const products = cart.map(item => ({ product: item._id, quantity: item.qty }));
+
+  try {
+      const res = await fetch(`${API_URL}/sales`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products, paymentMethod: 'efectivo' }) // Ajusta según tu backend
+      });
+
+      if(res.ok) {
+          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash - total)}`);
+          cart = [];
+          cashInput.value = '';
+          changeSpan.textContent = formatMoney(0);
+          renderCart();
+          fetchProducts(); // Actualizar stock visualmente
+      } else {
+          alert('Error al guardar venta');
       }
-  });
-
-  // Guardar Venta en Historial (LocalStorage)
-  const nuevaVenta = {
-      id: Date.now(),
-      fecha: new Date().toISOString(),
-      total: total,
-      productos: cart
-  };
-  const historialVentas = JSON.parse(localStorage.getItem('ventas')) || [];
-  historialVentas.push(nuevaVenta);
-  localStorage.setItem('ventas', JSON.stringify(historialVentas));
-
-  // Guardar actualización de stock
-  guardarEnStorage();
-
-  alert(`✅ Venta realizada\nCambio: ${formatMoney(cash - total)}`);
-
-  // Limpiar
-  cart = [];
-  cashInput.value = '';
-  changeSpan.textContent = formatMoney(0);
-  renderCart();
-  renderProducts(allProducts); // Actualizar vista de stock
-});
-
-// ====================
-// EXPORTAR EXCEL
-// ====================
-window.exportarExcel = function() {
-  const ventas = JSON.parse(localStorage.getItem('ventas')) || [];
-  if (ventas.length === 0) {
-    alert('No hay ventas para exportar');
-    return;
+  } catch (error) {
+      alert('Error de conexión');
   }
-  
-  // Aquí puedes agregar tu lógica de exportación...
-  // Por simplicidad, solo exportamos un log
-  console.log("Ventas:", ventas);
-  alert("Revisa la consola (F12) para ver los datos de ventas crudos.");
-};
+});
