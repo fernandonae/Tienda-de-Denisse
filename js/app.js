@@ -299,23 +299,35 @@ btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove(
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// BÚSQUEDA Y ESCÁNER
+// BÚSQUEDA Y ESCÁNER (CORREGIDO PARA AMBAS VISTAS 🔍)
 // ====================
 searchInput?.addEventListener('input', e => {
   const texto = e.target.value.trim().toLowerCase();
-  if (!texto) { renderProducts(allProducts); return; }
+  
+  // Si está vacío, mostramos todo
+  if (!texto) { 
+    renderProducts(allProducts); 
+    renderProductAdmin(allProducts); // <-- ¡ESTO FALTABA!
+    return; 
+  }
 
   const filtrados = allProducts.filter(p => {
     const nombre = p.name ? p.name.toLowerCase() : '';
     const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
     
+    // Buscar por Nombre O Código
     if (nombre.includes(texto) || codigo.includes(texto)) return true;
+    
+    // Buscar por Tags
     if (p.tags && Array.isArray(p.tags)) {
         return p.tags.some(tag => tag.toLowerCase().includes(texto));
     }
     return false;
   });
+
+  // Pintamos resultados en AMBAS vistas (Vendedor y Admin)
   renderProducts(filtrados);
+  renderProductAdmin(filtrados); // <-- ¡ESTO FALTABA!
 });
 
 barcodeInputPOS?.addEventListener('keydown', e => {
@@ -450,7 +462,6 @@ function mostrarResultados(listaVentas, contenedorDiv) {
             v.products.forEach(item => {
                 // 🔥 PROTECCIÓN: Si el producto es null, saltamos al siguiente
                 if (!item.product) {
-                    console.warn("Venta con producto nulo (borrado)", v);
                     // Opcional: Sumar a GENERAL lo que se pueda si item.price existe
                     if(item.price) porSocio['GENERAL'] = (porSocio['GENERAL'] || 0) + (item.price * item.quantity);
                     return; 
