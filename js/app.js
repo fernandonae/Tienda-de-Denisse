@@ -424,14 +424,20 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT
+// CHECKOUT (COBRAR)
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
   const total = getTotal();
   const cash = Number(cashInput.value);
-  if (cash < total) { alert('❌ Pago insuficiente'); return; }
+  
+  // Validación básica
+  if (cash < total && cash !== 0) { // Permitimos 0 si es crédito o exacto, pero idealmente validamos
+      alert('❌ Pago insuficiente'); 
+      return; 
+  }
 
+  // Preparamos datos para el backend
   const products = cart.map(item => ({ 
       product: item._id, 
       quantity: item.qty,
@@ -450,20 +456,104 @@ checkoutBtn.addEventListener('click', async () => {
       });
 
       if(res.ok) {
-          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash - total)}`);
+          // 1. Calculamos el cambio antes de borrar todo
+          const cambio = cash > 0 ? cash - total : 0;
+
+          // 2. 🖨️ IMPRIMIR TICKET (La función nueva)
+          imprimirTicket(cart, total, cash, cambio);
+
+          // 3. Limpieza
           cart = [];
           cashInput.value = '';
           changeSpan.textContent = formatMoney(0);
           renderCart();
-          fetchProducts(); 
+          fetchProducts(); // Para actualizar stock visualmente
+          
       } else {
           const errorData = await res.json();
           alert('Error: ' + errorData.message);
       }
   } catch (error) {
+      console.error(error);
       alert('Error de conexión');
   }
 });
+
+// ====================
+// 🖨️ FUNCIÓN IMPRIMIR TICKET
+// ====================
+function imprimirTicket(productos, total, efectivo, cambio) {
+    // Creamos una ventana nueva en blanco
+    const ventana = window.open('', 'PRINT', 'height=600,width=400');
+
+    // Generamos el HTML del ticket
+    // Usamos estilos simples para impresora térmica (ancho 58mm o 80mm)
+    ventana.document.write(`
+        <html>
+        <head>
+            <title>Ticket de Venta</title>
+            <style>
+                body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0; padding: 10px; }
+                .centrado { text-align: center; }
+                .linea { border-bottom: 1px dashed black; margin: 5px 0; }
+                .flex { display: flex; justify-content: space-between; }
+                h2 { margin: 5px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="centrado">
+                <h2>TIENDA DE DENISSE</h2>
+                <p>Fecha: ${new Date().toLocaleString()}</p>
+            </div>
+            
+            <div class="linea"></div>
+            
+            <div>
+                ${productos.map(p => `
+                    <div style="margin-bottom: 2px;">
+                        <div>${p.name}</div>
+                        <div class="flex">
+                            <span>${p.qty < 1 ? Number(p.qty).toFixed(3) : p.qty} x $${p.price}</span>
+                            <span>$${(p.qty * p.price).toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="linea"></div>
+
+            <div class="flex" style="font-size: 14px; font-weight: bold;">
+                <span>TOTAL:</span>
+                <span>$${total.toFixed(2)}</span>
+            </div>
+            
+            <div class="flex">
+                <span>Efectivo:</span>
+                <span>$${efectivo.toFixed(2)}</span>
+            </div>
+            <div class="flex">
+                <span>Cambio:</span>
+                <span>$${cambio.toFixed(2)}</span>
+            </div>
+
+            <div class="linea"></div>
+            <div class="centrado">
+                <p>¡Gracias por su compra!</p>
+            </div>
+        </body>
+        </html>
+    `);
+
+    // Mandamos a imprimir y cerramos la ventana
+    ventana.document.close();
+    ventana.focus();
+    
+    // Un pequeño retraso para asegurar que cargó el contenido
+    setTimeout(() => {
+        ventana.print();
+        ventana.close();
+    }, 250);
+}
 
 // ====================
 // SOCIOS
