@@ -340,7 +340,7 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT (CORREGIDO PARA TU SCHEMA)
+// CHECKOUT
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
@@ -348,11 +348,11 @@ checkoutBtn.addEventListener('click', async () => {
   const cash = Number(cashInput.value);
   if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
-  // 🔥 CORRECCIÓN: Agregamos 'price' al objeto porque tu Schema lo pide
+  // Enviamos price al backend
   const products = cart.map(item => ({ 
       product: item._id, 
       quantity: item.qty,
-      price: Number(item.price) // <--- ESTO FALTABA
+      price: Number(item.price)
   }));
 
   try {
@@ -361,7 +361,7 @@ checkoutBtn.addEventListener('click', async () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
               products, 
-              total: total, // Enviamos el total explícito
+              total: total, 
               paymentMethod: 'efectivo' 
           })
       });
@@ -383,7 +383,7 @@ checkoutBtn.addEventListener('click', async () => {
 });
 
 // ====================
-// 📊 REPORTES (PROTEGIDO CONTRA ERRORES)
+// 📊 REPORTES (PROTEGIDO - ANTI ERROR NULL)
 // ====================
 
 btnReporteDia?.addEventListener('click', async () => {
@@ -397,7 +397,6 @@ btnReporteDia?.addEventListener('click', async () => {
         
         const hoy = new Date().toLocaleDateString('en-CA'); 
         
-        // 🔥 FILTRO BLINDADO: Si no tiene fecha, lo ignoramos
         const ventasHoy = ventas.filter(venta => {
             if(!venta.createdAt) return false;
             return venta.createdAt.substring(0, 10) === hoy;
@@ -423,7 +422,6 @@ btnReporteRango?.addEventListener('click', async () => {
         const res = await fetch(`${API_URL}/sales`);
         const ventas = await res.json();
         
-        // 🔥 FILTRO BLINDADO
         const ventasRango = ventas.filter(venta => {
             if(!venta.createdAt) return false;
             const f = venta.createdAt.substring(0, 10);
@@ -448,26 +446,36 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     listaVentas.forEach(v => {
         totalGeneral += Number(v.total);
         
-        v.products.forEach(item => {
-            // Extraer ID
-            const idProd = item.product._id || item.product;
-            
-            // Buscar producto en memoria (forzando String)
-            const productoInfo = allProducts.find(p => String(p._id) === String(idProd)); 
-            
-            // Usamos el precio guardado en la venta (si existe) o el actual
-            let precio = item.price || 0; 
-            if(precio === 0 && productoInfo) precio = productoInfo.price;
+        if (v.products && Array.isArray(v.products)) {
+            v.products.forEach(item => {
+                // 🔥 PROTECCIÓN: Si el producto es null, saltamos al siguiente
+                if (!item.product) {
+                    console.warn("Venta con producto nulo (borrado)", v);
+                    // Opcional: Sumar a GENERAL lo que se pueda si item.price existe
+                    if(item.price) porSocio['GENERAL'] = (porSocio['GENERAL'] || 0) + (item.price * item.quantity);
+                    return; 
+                }
 
-            const subtotal = precio * item.quantity;
-            let tagSocio = 'GENERAL';
+                // Extraer ID (puede venir como string o como objeto populated)
+                const idProd = item.product._id || item.product;
+                
+                // Buscar producto en memoria (forzando String)
+                const productoInfo = allProducts.find(p => String(p._id) === String(idProd)); 
+                
+                // Usamos el precio guardado en la venta o el actual
+                let precio = Number(item.price) || 0; 
+                if(precio === 0 && productoInfo) precio = Number(productoInfo.price);
 
-            if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
-                tagSocio = productoInfo.tags[0].toUpperCase();
-            }
+                const subtotal = precio * item.quantity;
+                let tagSocio = 'GENERAL';
 
-            porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
-        });
+                if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
+                    tagSocio = productoInfo.tags[0].toUpperCase();
+                }
+
+                porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
+            });
+        }
     });
 
     let html = `
@@ -486,7 +494,7 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     }
 
     if (totalGeneral > sumaDesglosada) {
-         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Sin identificar</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
+         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Prod. Borrados</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
     }
 
     html += `</div>`;
@@ -503,11 +511,16 @@ window.exportarExcel = async function() {
         let csv = 'Fecha,Total,Detalle\n';
         ventas.forEach(v => {
             const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin fecha';
-            const detalle = v.products.map(p => {
-               const idProd = p.product._id || p.product;
-               const info = allProducts.find(prod => String(prod._id) === String(idProd));
-               return info ? `${info.name} (${p.quantity})` : 'Borrado';
-            }).join(' | ');
+            
+            let detalle = 'Sin productos';
+            if (v.products && Array.isArray(v.products)) {
+                detalle = v.products.map(p => {
+                   if(!p.product) return 'Producto Borrado'; // Protección aquí también
+                   const idProd = p.product._id || p.product;
+                   const info = allProducts.find(prod => String(prod._id) === String(idProd));
+                   return info ? `${info.name} (${p.quantity})` : 'Borrado';
+                }).join(' | ');
+            }
             csv += `${fecha},${v.total},"${detalle}"\n`;
         });
 
@@ -518,6 +531,7 @@ window.exportarExcel = async function() {
         link.download = `Ventas.csv`;
         link.click();
     } catch (error) {
-        alert('Error al generar Excel');
+        console.error(error);
+        alert('Error al generar Excel: ' + error.message);
     }
 };
