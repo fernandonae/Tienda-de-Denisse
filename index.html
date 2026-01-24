@@ -23,10 +23,7 @@
 
     <!-- ================= POS ================= -->
     <section id="posSection"
-      class="bg-white rounded-2xl shadow-lg grid grid-cols-3 overflow-hidden h-full">
-
-      <!-- IZQUIERDA -->
-      <div class="col-span-2 p-6 border-r">
+      class="bg-white rounded-2xl shadow-lg grid grid-cols-3 overflow-hidden h-[85vh]"> <div class="col-span-2 p-6 border-r flex flex-col h-full">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">
           Productos
         </h2>
@@ -34,24 +31,26 @@
         <input
           id="search"
           type="text"
-          placeholder="Buscar producto..."
+          placeholder="Buscar producto por nombre o tag..."
           class="w-full p-4 rounded-lg border border-pink-300 focus:ring-2 focus:ring-pink-400 outline-none mb-4"
         />
 
         <input
         id="barcodeInputPOS"
         type="text"
-        placeholder="Escanea el código de barras"
-        class="w-full p-4 rounded-lg border-2 border-pink-400 focus:ring-2 focus:ring-pink-500 outline-none"
+        placeholder="Escanea el código de barras aquí..."
+        class="w-full p-4 rounded-lg border-2 border-pink-400 focus:ring-2 focus:ring-pink-500 outline-none mb-4"
         />
+
+        <div id="products" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto content-start p-2">
+            </div>
 
       </div>
 
-      <!-- DERECHA -->
-      <div class="p-6 flex flex-col">
+      <div class="p-6 flex flex-col h-full bg-gray-50">
         <h2 class="text-2xl font-bold text-pink-600 mb-4">🧾 Ticket</h2>
 
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto bg-white rounded shadow p-2">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b text-gray-600">
@@ -71,32 +70,33 @@
           </table>
         </div>
 
-        <div class="mt-6 flex justify-between text-xl font-bold">
-          <span>Total</span>
-          <span class="text-pink-600"><span id="total">0</span></span>
+        <div class="mt-4 bg-white p-4 rounded shadow">
+            <div class="flex justify-between text-xl font-bold mb-2">
+            <span>Total</span>
+            <span class="text-pink-600"><span id="total">$0.00</span></span>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-sm text-gray-600">Paga con:</label>
+                <input
+                id="cashInput"
+                type="number"
+                min="0"
+                placeholder="0.00"
+                class="w-full border rounded-lg px-3 py-2 text-right text-lg"
+                />
+
+                <div class="flex justify-between text-lg font-bold text-gray-700">
+                <span>Cambio:</span>
+                <span id="changeSpan" class="text-green-600">$0.00</span>
+                </div>
+            </div>
+
+            <button id="checkoutBtn"
+            class="mt-4 w-full bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-xl text-lg font-bold shadow transition">
+            COBRAR
+            </button>
         </div>
-
-        <div class="mt-4 space-y-2">
-        <label class="text-sm text-gray-600">Paga con:</label>
-        <input
-        id="cashInput"
-        type="number"
-        min="0"
-        placeholder="0.00"
-        class="w-full border rounded-lg px-3 py-2 text-right"
-        />
-
-      <div class="flex justify-between text-lg font-bold">
-      <span>Cambio:</span>
-     <span id="changeSpan">$0.00</span>
-     </div>
-</div>
-
-
-        <button id="checkoutBtn"
-          class="mt-4 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-xl text-lg">
-          COBRAR
-        </button>
       </div>
     </section>
 
