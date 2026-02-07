@@ -312,74 +312,93 @@ btnGuardarProducto?.addEventListener('click', async () => {
 // LOGICA DE CARRITO Y CAJA
 // ====================
 function renderCart() {
+  // 🔑 Tomamos SIEMPRE los elementos reales del DOM
+  const cartTable = document.getElementById("cartTable");
+  const totalSpan = document.getElementById("total");
+  const cashInput = document.getElementById("cashInput");
+  const changeSpan = document.getElementById("changeSpan");
+
   cartTable.innerHTML = '';
+
+  // 🧾 Carrito vacío
   if (cart.length === 0) {
-    cartTable.innerHTML = `<tr class="text-center text-gray-400"><td colspan="4" class="py-6">Sin productos</td></tr>`;
+    cartTable.innerHTML = `
+      <tr class="text-center text-gray-400">
+        <td colspan="4" class="py-6">Sin productos</td>
+      </tr>`;
     totalSpan.textContent = formatMoney(0);
+    changeSpan.textContent = formatMoney(0);
     return;
   }
 
   let total = 0;
+
+  // 🛒 Pintar productos
   cart.forEach((item, index) => {
     const subtotal = Number(item.price) * Number(item.qty);
     total += subtotal;
+
     const tr = document.createElement('tr');
-    // Aquí construimos la fila
     tr.innerHTML = `
       <td>${item.name}</td>
       <td class="text-right">${formatMoney(item.price)}</td>
-      
       <td class="text-center font-bold text-gray-700">
         ${item.qty < 1 ? Number(item.qty).toFixed(3) : Number(item.qty)}
       </td>
-
       <td class="text-right flex justify-end gap-2">
         ${formatMoney(subtotal)}
-        <button onclick="removeFromCart(${index})" class="text-red-600 font-bold px-2">✖</button>
+        <button onclick="removeFromCart(${index})"
+          class="text-red-600 font-bold px-2">✖</button>
       </td>
     `;
     cartTable.appendChild(tr);
   });
-  
+
+  // 💰 Total
   totalSpan.textContent = formatMoney(total);
-  
-  if (cashInput.value) {
-    const cash = Number(cashInput.value);
-    const totalCalc = getTotal();
-    changeSpan.textContent = cash >= totalCalc ? formatMoney(cash - totalCalc) : formatMoney(0);
-  }
+
+  // 🔄 Cambio
+  const cash = Number(cashInput.value || 0);
+  changeSpan.textContent =
+    cash >= total ? formatMoney(cash - total) : formatMoney(0);
 }
 
+// ❌ Eliminar producto
 function removeFromCart(index) {
   if (!cart[index]) return;
   cart[index].qty > 1 ? cart[index].qty-- : cart.splice(index, 1);
   renderCart();
 }
 
-// Ahora la función recibe (producto, cantidad)
+// ➕ Agregar producto (con decimales)
 function addToCart(producto, cantidad = 1) {
   const item = cart.find(p => String(p._id) === String(producto._id));
-  
+
   if (item) {
-      // Sumamos la cantidad nueva (puede ser 1 o puede ser 0.25)
-      if(item.qty + cantidad > producto.stock) { 
-          alert('⚠️ Stock insuficiente'); 
-          return; 
-      }
-      item.qty += cantidad; // Sumar decimales
+    if (item.qty + cantidad > producto.stock) {
+      alert('⚠️ Stock insuficiente');
+      return;
+    }
+    item.qty += cantidad;
   } else {
-    cart.push({ 
-        _id: producto._id, 
-        name: producto.name, 
-        price: Number(producto.price), 
-        qty: cantidad // Guardamos la cantidad exacta
+    cart.push({
+      _id: producto._id,
+      name: producto.name,
+      price: Number(producto.price),
+      qty: cantidad
     });
   }
-  
+
   renderCart();
 }
 
-function getTotal() { return cart.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0); }
+// 🔢 Total numérico (para cálculos)
+function getTotal() {
+  return cart.reduce(
+    (sum, item) => sum + (Number(item.price) * Number(item.qty)), 0
+  );
+}
+
 
 // ====================
 // NAVEGACIÓN
