@@ -1,5 +1,5 @@
 // ====================
-// 🌍 CONEXIÓN AL SERVIDOR (RENDER)
+// 🌍 CONEXIÓN AL SERVIDOR
 // ====================
 const API_URL = 'https://tienda-de-denisse.onrender.com/api'; 
 
@@ -59,6 +59,9 @@ const resultadoRango = document.getElementById('resultadoRango');
 const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 
+// Buscador Inventario
+const inventorySearch = document.getElementById('inventorySearch');
+
 // ====================
 // UTILIDADES
 // ====================
@@ -76,6 +79,10 @@ const hideAllSections = () => {
 // ====================
 document.addEventListener('DOMContentLoaded', () => {
     console.log("App iniciada 🚀");
+    // Mensaje de carga inicial
+    if(productList) productList.innerHTML = '<p class="text-center p-4 text-gray-500 animate-pulse">⏳ Conectando con el servidor...</p>';
+    if(productsDiv) productsDiv.innerHTML = '<p class="col-span-full text-center p-4 text-gray-500 animate-pulse">⏳ Despertando servidor...</p>';
+    
     fetchProducts();
     fetchPartners();
     renderCart();
@@ -86,14 +93,19 @@ async function fetchProducts() {
         const res = await fetch(`${API_URL}/products`);
         if (!res.ok) throw new Error('Error cargando productos');
         allProducts = await res.json();
+        
         // Aseguramos que los precios sean números
         allProducts = allProducts.map(p => ({...p, price: Number(p.price)}));
+        
+        console.log("Productos cargados:", allProducts.length);
         
         renderProducts(allProducts);
         renderProductAdmin(allProducts);
     } catch (error) {
         console.error(error);
-        alert('Error conectando con el servidor. Revisa tu internet.');
+        const errorMsg = '<p class="text-red-500 text-center font-bold">⚠️ Error de conexión. Revisa tu internet o espera un minuto.</p>';
+        if(productList) productList.innerHTML = errorMsg;
+        if(productsDiv) productsDiv.innerHTML = errorMsg;
     }
 }
 
@@ -113,10 +125,15 @@ async function fetchPartners() {
 // VISTAS DE PRODUCTOS
 // ====================
 
-// 1. VISTA TARJETAS (POS) - CON SEMÁFORO DE STOCK 🚦
+// 1. VISTA TARJETAS (POS)
 function renderProducts(products) {
   if (!productsDiv) return;
   productsDiv.innerHTML = '';
+  
+  if (products.length === 0) {
+      productsDiv.innerHTML = '<p class="col-span-full text-center text-gray-400">No hay productos en el inventario.</p>';
+      return;
+  }
   
   products.forEach(p => {
     const card = document.createElement('div');
@@ -127,20 +144,17 @@ function renderProducts(products) {
     let opacidad = 'opacity-100';
     let clickeable = true;
 
-    // 1. Stock Crítico (1 a 5 unidades)
     if (p.stock > 0 && p.stock <= 5) {
-        bordeColor = 'border-orange-400 bg-orange-50'; // Fondo naranjita
+        bordeColor = 'border-orange-400 bg-orange-50';
         estadoStock = '<span class="text-orange-600 font-bold text-xs animate-pulse">¡POCO STOCK!</span>';
     } 
-    // 2. Agotado (0 o menos)
     else if (p.stock <= 0) {
         bordeColor = 'border-gray-200 bg-gray-100';
-        opacidad = 'opacity-60'; // Se ve borroso
+        opacidad = 'opacity-60';
         estadoStock = '<span class="text-red-600 font-bold text-xs">AGOTADO</span>';
         clickeable = false;
     }
 
-    // Clases base + dinámicas
     card.className = `p-4 rounded shadow hover:shadow-lg transition cursor-pointer border-2 ${bordeColor} ${opacidad} relative overflow-hidden`;
     
     card.innerHTML = `
@@ -155,7 +169,6 @@ function renderProducts(products) {
       </div>
     `;
 
-    // Solo permitimos clic si hay stock
     if (clickeable) {
         card.onclick = () => {
             const inputGranel = document.getElementById('bulkMoneyInput');
@@ -166,16 +179,13 @@ function renderProducts(products) {
                 cantidadAgregar = dineroCliente / p.price;
                 if(inputGranel) inputGranel.value = ''; 
             }
-
-            // Validar stock antes de agregar
             addToCart(p, cantidadAgregar);
-
-            // Efecto visual al clic
+            
+            // Efecto visual
             card.style.transform = "scale(0.95)";
             setTimeout(() => card.style.transform = "scale(1)", 100);
         };
     } else {
-        // Si está agotado, cursor de prohibido
         card.style.cursor = 'not-allowed';
     }
 
@@ -183,10 +193,15 @@ function renderProducts(products) {
   });
 }
 
-// 2. VISTA LISTA (ADMIN - CON BOTÓN EDITAR)
+// 2. VISTA LISTA (ADMIN)
 function renderProductAdmin(products) {
   if (!productList) return;
   productList.innerHTML = '';
+
+  if (products.length === 0) {
+      productList.innerHTML = '<p class="text-center text-gray-400 py-4">No se encontraron productos.</p>';
+      return;
+  }
 
   products.forEach(p => {
     const div = document.createElement('div');
@@ -203,30 +218,26 @@ function renderProductAdmin(products) {
       </div>
     `;
 
-    // LOGICA EDITAR
+    // EDITAR
     div.querySelector('.edit').onclick = () => {
-        // Rellenar formulario
         barcodeInput.value = p.barcode;
         nameInput.value = p.name;
         priceInput.value = p.price;
         stockInput.value = p.stock;
         tagsInput.value = p.tags ? p.tags.join(',') : '';
 
-        // Bloquear Barcode (ID único)
         barcodeInput.disabled = true;
         barcodeInput.classList.add('bg-gray-200');
 
-        // Cambiar estado a EDICIÓN
         productoEnEdicionId = p._id;
         btnGuardarProducto.textContent = "🔄 Actualizar";
         btnGuardarProducto.classList.remove('bg-pink-600');
         btnGuardarProducto.classList.add('bg-yellow-500');
 
-        // Subir scroll
         productsSection.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // LOGICA ELIMINAR
+    // ELIMINAR
     div.querySelector('.delete').onclick = async () => {
       if (!confirm(`Eliminar ${p.name}?`)) return;
       try {
@@ -259,16 +270,15 @@ btnGuardarProducto?.addEventListener('click', async () => {
 
   try {
       let res;
-      // ¿Estamos editando o creando?
       if (productoEnEdicionId) {
-          // EDITAR (PUT)
+          // EDITAR
           res = await fetch(`${API_URL}/products/${productoEnEdicionId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, stock, tags }) // No enviamos barcode
+            body: JSON.stringify({ name, price, stock, tags }) 
           });
       } else {
-          // CREAR (POST)
+          // CREAR
           res = await fetch(`${API_URL}/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -280,17 +290,20 @@ btnGuardarProducto?.addEventListener('click', async () => {
         alert(productoEnEdicionId ? 'Producto Actualizado 🔄' : 'Producto Guardado ✅');
         fetchProducts();
         
-        // LIMPIAR FORMULARIO
+        // LIMPIAR
         barcodeInput.value = ''; nameInput.value = ''; 
         priceInput.value = ''; stockInput.value = ''; tagsInput.value = '';
         
-        // RESTAURAR ESTADO NORMAL
+        // RESTAURAR
         productoEnEdicionId = null;
         barcodeInput.disabled = false;
         barcodeInput.classList.remove('bg-gray-200');
         btnGuardarProducto.textContent = "Guardar Producto";
         btnGuardarProducto.classList.add('bg-pink-600');
         btnGuardarProducto.classList.remove('bg-yellow-500');
+        
+        // Foco al inicio
+        barcodeInput.focus();
       } else {
           const err = await res.json();
           alert('Error: ' + (err.message || 'Código duplicado'));
@@ -304,18 +317,13 @@ btnGuardarProducto?.addEventListener('click', async () => {
 });
 
 // ====================
-// 🛒 LÓGICA DEL CARRITO (FUNCIONES FALTANTES AGREGADAS)
+// 🛒 LÓGICA CARRITO
 // ====================
-
 function addToCart(product, quantity = 1) {
-    // Buscamos si el producto ya está en el carrito por su ID
     const existingItem = cart.find(item => item._id === product._id);
-
     if (existingItem) {
-        // Si ya existe, sumamos la cantidad
         existingItem.qty += quantity;
     } else {
-        // Si no existe, lo agregamos al arreglo
         cart.push({
             _id: product._id,
             name: product.name,
@@ -323,33 +331,22 @@ function addToCart(product, quantity = 1) {
             qty: quantity
         });
     }
-    // Actualizamos la tabla
     renderCart();
 }
 
 function removeFromCart(index) {
-    // Borrar elemento del arreglo usando su índice
     cart.splice(index, 1);
-    // Actualizar vista
     renderCart();
 }
 
 function getTotal() {
-    // Calcular suma total: precio * cantidad
     return cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 }
 
 function renderCart() {
-  const cartTable = document.getElementById("cartTable");
-  const totalSpan = document.getElementById("total");
-  const cashInput = document.getElementById("cashInput");
-  const changeSpan = document.getElementById("changeSpan");
-
   if (!cartTable || !totalSpan) return;
-
   cartTable.innerHTML = '';
 
-  // 🧾 Carrito vacío
   if (cart.length === 0) {
     cartTable.innerHTML = `
       <tr class="text-center text-gray-400">
@@ -361,7 +358,6 @@ function renderCart() {
   }
 
   let total = 0;
-
   cart.forEach((item, index) => {
     const qty = Number(item.qty);
     const price = Number(item.price);
@@ -378,26 +374,17 @@ function renderCart() {
       <td class="text-right">
         <div class="flex justify-end items-center gap-2">
           <span>${formatMoney(subtotal)}</span>
-          <button 
-            type="button"
-            onclick="removeFromCart(${index})"
-            class="text-red-600 font-bold px-2"
-          >✖</button>
+          <button type="button" onclick="removeFromCart(${index})" class="text-red-600 font-bold px-2">✖</button>
         </div>
       </td>
     `;
     cartTable.appendChild(tr);
   });
 
-  // 💰 Total
   totalSpan.textContent = formatMoney(total);
-
-  // 🔄 Cambio
   const cash = Number(cashInput?.value || 0);
-  changeSpan.textContent =
-    cash >= total ? formatMoney(cash - total) : formatMoney(0);
+  changeSpan.textContent = cash >= total ? formatMoney(cash - total) : formatMoney(0);
 }
-
 
 // ====================
 // NAVEGACIÓN
@@ -408,32 +395,39 @@ btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove(
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// 🔍 BUSCADOR
+// 🔍 BUSCADORES
 // ====================
+// 1. Buscador POS
 if (searchInput) {
   searchInput.addEventListener('input', (e) => {
     const texto = e.target.value.trim().toLowerCase();
-
-    if (!texto) { 
-        renderProducts(allProducts); 
-        renderProductAdmin(allProducts);
-        return; 
-    }
-
+    if (!texto) { renderProducts(allProducts); return; }
     const filtrados = allProducts.filter(p => {
         const nombre = p.name ? p.name.toLowerCase() : '';
         const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
-        
         if (nombre.includes(texto) || codigo.includes(texto)) return true;
-        if (p.tags && Array.isArray(p.tags)) {
-            return p.tags.some(tag => tag.toLowerCase().includes(texto));
-        }
+        if (p.tags && Array.isArray(p.tags)) return p.tags.some(tag => tag.toLowerCase().includes(texto));
         return false;
     });
-
     renderProducts(filtrados);
-    renderProductAdmin(filtrados);
   });
+}
+
+// 2. Buscador INVENTARIO (ADMIN)
+if (inventorySearch) {
+    inventorySearch.addEventListener('input', (e) => {
+        const texto = e.target.value.trim().toLowerCase();
+        if (!texto) {
+            renderProductAdmin(allProducts);
+            return;
+        }
+        const filtrados = allProducts.filter(p => {
+            const nombre = p.name ? p.name.toLowerCase() : '';
+            const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
+            return nombre.includes(texto) || codigo.includes(texto);
+        });
+        renderProductAdmin(filtrados);
+    });
 }
 
 // ====================
@@ -461,15 +455,12 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT (COBRAR)
+// CHECKOUT
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
   const total = getTotal();
   const cash = Number(cashInput.value);
-  
-  // Validación opcional: quitar comentario si quieres obligar a poner efectivo exacto o mayor
-  // if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
   const products = cart.map(item => ({ 
       product: item._id, 
@@ -504,78 +495,6 @@ checkoutBtn.addEventListener('click', async () => {
   }
 });
 
-
-// ====================
-// TICKET E IMPRESIÓN
-// ====================
-function imprimirTicket(productos, total, efectivo, cambio) {
-    const ventana = window.open('', 'PRINT', 'height=600,width=400');
-
-    ventana.document.write(`
-        <html>
-        <head>
-            <title>Ticket de Venta</title>
-            <style>
-                body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0; padding: 10px; }
-                .centrado { text-align: center; }
-                .linea { border-bottom: 1px dashed black; margin: 5px 0; }
-                .flex { display: flex; justify-content: space-between; }
-                h2 { margin: 5px 0; }
-            </style>
-        </head>
-        <body>
-            <div class="centrado">
-                <h2>TIENDA DE DENISSE</h2>
-                <p>Fecha: ${new Date().toLocaleString()}</p>
-            </div>
-            
-            <div class="linea"></div>
-            
-            <div>
-                ${productos.map(p => `
-                    <div style="margin-bottom: 2px;">
-                        <div>${p.name}</div>
-                        <div class="flex">
-                            <span>${p.qty < 1 ? Number(p.qty).toFixed(3) : p.qty} x $${p.price}</span>
-                            <span>$${(p.qty * p.price).toFixed(2)}</span>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-
-            <div class="linea"></div>
-
-            <div class="flex" style="font-size: 14px; font-weight: bold;">
-                <span>TOTAL:</span>
-                <span>$${total.toFixed(2)}</span>
-            </div>
-            
-            <div class="flex">
-                <span>Efectivo:</span>
-                <span>$${efectivo.toFixed(2)}</span>
-            </div>
-            <div class="flex">
-                <span>Cambio:</span>
-                <span>$${cambio.toFixed(2)}</span>
-            </div>
-
-            <div class="linea"></div>
-            <div class="centrado">
-                <p>¡Gracias por su compra!</p>
-            </div>
-        </body>
-        </html>
-    `);
-
-    ventana.document.close();
-    ventana.focus();
-    
-    setTimeout(() => {
-        ventana.print();
-        ventana.close();
-    }, 250);
-}
-
 // ====================
 // SOCIOS
 // ====================
@@ -600,7 +519,6 @@ function renderPartners(partners) {
 addPartnerBtn?.addEventListener('click', async () => {
   const name = partnerName.value.trim();
   const tag = partnerTag.value.trim().toLowerCase();
-
   if (!name || !tag) { alert('Completa los campos'); return; }
 
   try {
@@ -611,29 +529,22 @@ addPartnerBtn?.addEventListener('click', async () => {
     });
     if(res.ok) {
         partnerName.value = ''; partnerTag.value = ''; fetchPartners();
-    } else {
-        alert('Error al guardar socio');
-    }
-  } catch (error) {
-      alert('Error de red');
-  }
+    } else { alert('Error al guardar socio'); }
+  } catch (error) { alert('Error de red'); }
 });
 
 // ====================
-// 📊 REPORTES
+// REPORTES
 // ====================
 btnReporteDia?.addEventListener('click', async () => {
     resultadoDia.classList.remove('hidden');
     resultadoDia.innerHTML = '<p class="text-gray-500 animate-pulse">Cargando...</p>';
-
     try {
         const res = await fetch(`${API_URL}/sales`);
         if (!res.ok) throw new Error('Error al obtener ventas');
         const ventas = await res.json();
-        
         const hoy = new Date().toLocaleDateString('en-CA'); 
         const ventasHoy = ventas.filter(v => v.createdAt && v.createdAt.substring(0, 10) === hoy);
-
         mostrarResultados(ventasHoy, resultadoDia);
     } catch (error) {
         resultadoDia.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
@@ -644,10 +555,8 @@ btnReporteRango?.addEventListener('click', async () => {
     const inicio = startDateInput.value;
     const fin = endDateInput.value;
     if (!inicio || !fin) { alert('Selecciona fechas'); return; }
-
     resultadoRango.classList.remove('hidden');
     resultadoRango.innerHTML = '<p class="text-gray-500 animate-pulse">Calculando...</p>';
-
     try {
         const res = await fetch(`${API_URL}/sales`);
         const ventas = await res.json();
@@ -667,10 +576,8 @@ function mostrarResultados(listaVentas, contenedorDiv) {
         contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hay ventas.</p>';
         return;
     }
-
     let totalGeneral = 0;
     const porSocio = {}; 
-
     listaVentas.forEach(v => {
         totalGeneral += Number(v.total);
         if (v.products && Array.isArray(v.products)) {
@@ -681,13 +588,10 @@ function mostrarResultados(listaVentas, contenedorDiv) {
                 }
                 const idProd = item.product._id || item.product;
                 const productoInfo = allProducts.find(p => String(p._id) === String(idProd)); 
-                
                 let precio = Number(item.price) || 0; 
                 if(precio === 0 && productoInfo) precio = Number(productoInfo.price);
-
                 const subtotal = precio * item.quantity;
                 let tagSocio = 'GENERAL';
-
                 if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
                     tagSocio = productoInfo.tags[0].toUpperCase();
                 }
@@ -704,15 +608,8 @@ function mostrarResultados(listaVentas, contenedorDiv) {
         <div class="text-sm text-gray-600 space-y-1">
             <p class="font-bold mb-1">Desglose:</p>
     `;
-
-    let sumaDesglosada = 0;
     for (const [tag, monto] of Object.entries(porSocio)) {
-        sumaDesglosada += monto;
         html += `<div class="flex justify-between"><span class="uppercase">👤 ${tag}</span><span class="font-medium">${formatMoney(monto)}</span></div>`;
-    }
-
-    if (totalGeneral > sumaDesglosada) {
-         html += `<div class="flex justify-between text-orange-500"><span class="uppercase">⚠️ Prod. Borrados</span><span class="font-medium">${formatMoney(totalGeneral - sumaDesglosada)}</span></div>`;
     }
     html += `</div>`;
     contenedorDiv.innerHTML = html;
@@ -724,7 +621,6 @@ window.exportarExcel = async function() {
         if (!res.ok) throw new Error('Error al bajar historial');
         const ventas = await res.json();
         if (ventas.length === 0) { alert('No hay ventas'); return; }
-
         let csv = 'Fecha,Total,Detalle\n';
         ventas.forEach(v => {
             const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin fecha';
@@ -745,9 +641,7 @@ window.exportarExcel = async function() {
         link.href = url;
         link.download = `Ventas.csv`;
         link.click();
-    } catch (error) {
-        alert('Error al generar Excel');
-    }
+    } catch (error) { alert('Error al generar Excel'); }
 };
 
 document.getElementById('clearBulk')?.addEventListener('click', () => {
@@ -755,42 +649,9 @@ document.getElementById('clearBulk')?.addEventListener('click', () => {
 });
 
 // ==========================================
-// 🔍 NUEVO: BUSCADOR DE INVENTARIO (ADMIN)
+// ⚡ NAVEGACIÓN CON TECLA "ENTER"
 // ==========================================
-const inventorySearch = document.getElementById('inventorySearch');
-
-if (inventorySearch) {
-    inventorySearch.addEventListener('input', (e) => {
-        const texto = e.target.value.trim().toLowerCase();
-        
-        // Si está vacío, mostramos todo
-        if (!texto) {
-            renderProductAdmin(allProducts);
-            return;
-        }
-
-        // Filtramos por nombre o código
-        const filtrados = allProducts.filter(p => {
-            const nombre = p.name ? p.name.toLowerCase() : '';
-            const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
-            return nombre.includes(texto) || codigo.includes(texto);
-        });
-
-        renderProductAdmin(filtrados);
-    });
-}
-
-// ==========================================
-// ⚡ NUEVO: NAVEGACIÓN CON TECLA "ENTER"
-// ==========================================
-// Lista ordenada de los inputs del formulario
-const formInputs = [
-    'barcodeInput', // 1
-    'nameInput',    // 2
-    'priceInput',   // 3
-    'stockInput',   // 4
-    'tagsInput'     // 5
-];
+const formInputs = ['barcodeInput', 'nameInput', 'priceInput', 'stockInput', 'tagsInput'];
 
 formInputs.forEach((id, index) => {
     const input = document.getElementById(id);
@@ -798,20 +659,14 @@ formInputs.forEach((id, index) => {
 
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            e.preventDefault(); // Evita que haga cosas raras
-
+            e.preventDefault();
             const nextId = formInputs[index + 1];
-
             if (nextId) {
-                // Si hay un siguiente input, le damos foco
                 document.getElementById(nextId).focus();
             } else {
-                // Si es el último (tagsInput), hacemos click en GUARDAR
+                // Último campo: Click en guardar
                 document.getElementById('addProduct').click();
-                // Y regresamos el foco al inicio para seguir capturando rápido
-                setTimeout(() => {
-                    document.getElementById('barcodeInput').focus();
-                }, 100); 
+                setTimeout(() => { document.getElementById('barcodeInput').focus(); }, 100); 
             }
         }
     });
