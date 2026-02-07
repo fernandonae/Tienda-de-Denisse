@@ -13,5 +13,4 @@ router.post('/', createSale);
 router.get('/daily-report', getDailyReport);
 router.get('/partner/:partner', getSalesByPartner);
 
-
 module.exports = router;

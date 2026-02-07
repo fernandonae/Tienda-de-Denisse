@@ -1,55 +1,72 @@
 const Sale = require('../models/sale');
-const Product = require('../models/products'); // 👈 IMPORTANTE: Necesitamos esto para restar stock
+const Product = require('../models/products');
 
+// ===============================
 // Crear una nueva venta
+// ===============================
 exports.createSale = async (req, res) => {
   try {
     const { products, total, paymentMethod } = req.body;
 
-    // 1. Guardar la venta en el historial (Como hacíamos antes)
+    // 🔴 Validaciones básicas (MUY importantes)
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'La venta no tiene productos' });
+    }
+
+    if (!total || total <= 0) {
+      return res.status(400).json({ message: 'Total inválido' });
+    }
+
+    // 1️⃣ Guardar la venta
     const newSale = new Sale({
       products,
       total,
       paymentMethod
     });
-    
+
     await newSale.save();
 
-    // ==========================================
-    // 2. 📉 ACTUALIZAR INVENTARIO (LA MAGIA)
-    // ==========================================
-    
-    // Recorremos la lista de productos que se vendieron
+    // 2️⃣ Actualizar inventario
     for (const item of products) {
-        
-        // Usamos una función especial de Mongo llamada $inc (incrementar)
-        // Al poner un número negativo, RESTA.
-        // item.product es el ID
-        // item.quantity es cuánto vendiste (ej: 1 o 0.250)
-        
-        await Product.findByIdAndUpdate(
-            item.product, 
-            { $inc: { stock: -item.quantity } } 
-        );
+      if (!item.product || !item.quantity) continue;
+
+      await Product.findByIdAndUpdate(
+        item.product,
+        { $inc: { stock: -item.quantity } },
+        { new: true }
+      );
     }
 
-    res.status(201).json(newSale);
+    res.status(201).json({
+      message: 'Venta registrada correctamente',
+      sale: newSale
+    });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error al procesar la venta', error });
+    console.error('❌ Error en createSale:', error);
+    res.status(500).json({
+      message: 'Error al procesar la venta',
+      error: error.message
+    });
   }
 };
 
+// ===============================
 // Obtener todas las ventas
+// ===============================
 exports.getSales = async (req, res) => {
   try {
-    // populate('products.product') sirve para traer el nombre del producto en el reporte
     const sales = await Sale.find()
-        .populate('products.product') 
-        .sort({ createdAt: -1 }); // Ordenar por fecha (más reciente primero)
+      .populate('products.product') // Trae info del producto
+      .sort({ createdAt: -1 });
+
     res.json(sales);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener ventas' });
+    console.error('❌ Error en getSales:', error);
+    res.status(500).json({
+      message: 'Error al obtener ventas',
+      error: error.message
+    });
   }
 };
