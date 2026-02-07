@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("App iniciada 🚀");
     fetchProducts();
     fetchPartners();
+    renderCart();
 });
 
 async function fetchProducts() {
@@ -383,7 +384,7 @@ function getTotal() { return cart.reduce((sum, item) => sum + (Number(item.price
 // ====================
 // NAVEGACIÓN
 // ====================
-btnPOS.onclick = () => { hideAllSections(); posSection.classList.remove('hidden'); };
+btnPOS.onclick = () => { hideAllSections(); posSection.classList.remove('hidden'); renderCart();};
 btnProducts.onclick = () => { hideAllSections(); productsSection.classList.remove('hidden'); };
 btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove('hidden'); };
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
