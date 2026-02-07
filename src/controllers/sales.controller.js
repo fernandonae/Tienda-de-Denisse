@@ -1,72 +1,102 @@
 const Sale = require('../models/sale');
 const Product = require('../models/products');
 
-// ===============================
-// Crear una nueva venta
-// ===============================
+// =======================
+// 🛒 CREAR VENTA
+// =======================
 exports.createSale = async (req, res) => {
   try {
-    const { products, total, paymentMethod } = req.body;
+    const { products, total, paymentMethod, partner } = req.body;
 
-    // 🔴 Validaciones básicas (MUY importantes)
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ message: 'La venta no tiene productos' });
-    }
-
-    if (!total || total <= 0) {
-      return res.status(400).json({ message: 'Total inválido' });
-    }
-
-    // 1️⃣ Guardar la venta
     const newSale = new Sale({
       products,
       total,
-      paymentMethod
+      paymentMethod,
+      partner
     });
 
     await newSale.save();
 
-    // 2️⃣ Actualizar inventario
+    // 📉 Actualizar stock
     for (const item of products) {
-      if (!item.product || !item.quantity) continue;
-
       await Product.findByIdAndUpdate(
         item.product,
-        { $inc: { stock: -item.quantity } },
-        { new: true }
+        { $inc: { stock: -item.quantity } }
       );
     }
 
-    res.status(201).json({
-      message: 'Venta registrada correctamente',
-      sale: newSale
-    });
+    res.status(201).json(newSale);
 
   } catch (error) {
-    console.error('❌ Error en createSale:', error);
-    res.status(500).json({
-      message: 'Error al procesar la venta',
-      error: error.message
-    });
+    console.error(error);
+    res.status(500).json({ message: 'Error al procesar la venta' });
   }
 };
 
-// ===============================
-// Obtener todas las ventas
-// ===============================
+// =======================
+// 📄 TODAS LAS VENTAS
+// =======================
 exports.getSales = async (req, res) => {
   try {
     const sales = await Sale.find()
-      .populate('products.product') // Trae info del producto
+      .populate('products.product')
       .sort({ createdAt: -1 });
 
     res.json(sales);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener ventas' });
+  }
+};
+
+// =======================
+// 📊 REPORTE DIARIO
+// =======================
+exports.getDailyReport = async (req, res) => {
+  try {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const sales = await Sale.find({
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    const total = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+    res.json({
+      date: start.toLocaleDateString(),
+      totalSales: sales.length,
+      totalAmount: total,
+      sales
+    });
 
   } catch (error) {
-    console.error('❌ Error en getSales:', error);
-    res.status(500).json({
-      message: 'Error al obtener ventas',
-      error: error.message
+    res.status(500).json({ message: 'Error en reporte diario' });
+  }
+};
+
+// =======================
+// 🤝 REPORTE POR SOCIO / CAJERO
+// =======================
+exports.getSalesByPartner = async (req, res) => {
+  try {
+    const { partner } = req.params;
+
+    const sales = await Sale.find({ partner })
+      .sort({ createdAt: -1 });
+
+    const total = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+    res.json({
+      partner,
+      totalSales: sales.length,
+      totalAmount: total,
+      sales
     });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error en reporte por socio' });
   }
 };
