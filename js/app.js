@@ -9,7 +9,7 @@ const API_URL = 'https://tienda-de-denisse.onrender.com/api';
 let allProducts = [];
 let allPartners = [];
 let cart = [];
-let productoEnEdicionId = null; // Variable para controlar la edición
+let productoEnEdicionId = null; 
 
 // ====================
 // ELEMENTOS DEL DOM
@@ -43,7 +43,7 @@ const nameInput = document.getElementById('nameInput');
 const priceInput = document.getElementById('priceInput');
 const stockInput = document.getElementById('stockInput');
 const tagsInput = document.getElementById('tagsInput');
-const btnGuardarProducto = document.getElementById('addProduct'); // El botón de guardar
+const btnGuardarProducto = document.getElementById('addProduct'); 
 
 // Formulario Socios
 const partnerList = document.getElementById('partnerList');
@@ -113,13 +113,7 @@ async function fetchPartners() {
 // VISTAS DE PRODUCTOS
 // ====================
 
-// 1. VISTA TARJETAS (POS)
-// ====================
-// 1. VISTA TARJETAS (POS) - CON CLIC
-// ====================
-// ====================
 // 1. VISTA TARJETAS (POS) - CON SEMÁFORO DE STOCK 🚦
-// ====================
 function renderProducts(products) {
   if (!productsDiv) return;
   productsDiv.innerHTML = '';
@@ -188,6 +182,7 @@ function renderProducts(products) {
     productsDiv.appendChild(card);
   });
 }
+
 // 2. VISTA LISTA (ADMIN - CON BOTÓN EDITAR)
 function renderProductAdmin(products) {
   if (!productList) return;
@@ -309,8 +304,41 @@ btnGuardarProducto?.addEventListener('click', async () => {
 });
 
 // ====================
-// LOGICA DE CARRITO Y CAJA
+// 🛒 LÓGICA DEL CARRITO (FUNCIONES FALTANTES AGREGADAS)
 // ====================
+
+function addToCart(product, quantity = 1) {
+    // Buscamos si el producto ya está en el carrito por su ID
+    const existingItem = cart.find(item => item._id === product._id);
+
+    if (existingItem) {
+        // Si ya existe, sumamos la cantidad
+        existingItem.qty += quantity;
+    } else {
+        // Si no existe, lo agregamos al arreglo
+        cart.push({
+            _id: product._id,
+            name: product.name,
+            price: Number(product.price),
+            qty: quantity
+        });
+    }
+    // Actualizamos la tabla
+    renderCart();
+}
+
+function removeFromCart(index) {
+    // Borrar elemento del arreglo usando su índice
+    cart.splice(index, 1);
+    // Actualizar vista
+    renderCart();
+}
+
+function getTotal() {
+    // Calcular suma total: precio * cantidad
+    return cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+}
+
 function renderCart() {
   const cartTable = document.getElementById("cartTable");
   const totalSpan = document.getElementById("total");
@@ -380,12 +408,11 @@ btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove(
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
 // ====================
-// 🔍 BUSCADOR (ARREGLADO)
+// 🔍 BUSCADOR
 // ====================
 if (searchInput) {
   searchInput.addEventListener('input', (e) => {
     const texto = e.target.value.trim().toLowerCase();
-    console.log("Buscando:", texto); // 👈 Para depurar
 
     if (!texto) { 
         renderProducts(allProducts); 
@@ -434,13 +461,15 @@ cashInput.addEventListener('input', () => {
 });
 
 // ====================
-// CHECKOUT
+// CHECKOUT (COBRAR)
 // ====================
 checkoutBtn.addEventListener('click', async () => {
   if (cart.length === 0) return;
   const total = getTotal();
   const cash = Number(cashInput.value);
-  if (cash < total) { alert('❌ Pago insuficiente'); return; }
+  
+  // Validación opcional: quitar comentario si quieres obligar a poner efectivo exacto o mayor
+  // if (cash < total) { alert('❌ Pago insuficiente'); return; }
 
   const products = cart.map(item => ({ 
       product: item._id, 
@@ -460,7 +489,7 @@ checkoutBtn.addEventListener('click', async () => {
       });
 
       if(res.ok) {
-          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash - total)}`);
+          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash >= total ? cash - total : 0)}`);
           cart = [];
           cashInput.value = '';
           changeSpan.textContent = formatMoney(0);
@@ -477,12 +506,11 @@ checkoutBtn.addEventListener('click', async () => {
 
 
 // ====================
+// TICKET E IMPRESIÓN
+// ====================
 function imprimirTicket(productos, total, efectivo, cambio) {
-    // Creamos una ventana nueva en blanco
     const ventana = window.open('', 'PRINT', 'height=600,width=400');
 
-    // Generamos el HTML del ticket
-    // Usamos estilos simples para impresora térmica (ancho 58mm o 80mm)
     ventana.document.write(`
         <html>
         <head>
@@ -539,11 +567,9 @@ function imprimirTicket(productos, total, efectivo, cambio) {
         </html>
     `);
 
-    // Mandamos a imprimir y cerramos la ventana
     ventana.document.close();
     ventana.focus();
     
-    // Un pequeño retraso para asegurar que cargó el contenido
     setTimeout(() => {
         ventana.print();
         ventana.close();
