@@ -1,5 +1,5 @@
 const Sale = require('../models/sale');
-const Product = require('../models/Product'); // 👈 IMPORTANTE: Necesitamos esto para restar stock
+const Product = require('../models/products'); // 👈 IMPORTANTE: Necesitamos esto para restar stock
 
 // Crear una nueva venta
 exports.createSale = async (req, res) => {
