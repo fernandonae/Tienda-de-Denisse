@@ -753,3 +753,66 @@ window.exportarExcel = async function() {
 document.getElementById('clearBulk')?.addEventListener('click', () => {
     document.getElementById('bulkMoneyInput').value = '';
 });
+
+// ==========================================
+// 🔍 NUEVO: BUSCADOR DE INVENTARIO (ADMIN)
+// ==========================================
+const inventorySearch = document.getElementById('inventorySearch');
+
+if (inventorySearch) {
+    inventorySearch.addEventListener('input', (e) => {
+        const texto = e.target.value.trim().toLowerCase();
+        
+        // Si está vacío, mostramos todo
+        if (!texto) {
+            renderProductAdmin(allProducts);
+            return;
+        }
+
+        // Filtramos por nombre o código
+        const filtrados = allProducts.filter(p => {
+            const nombre = p.name ? p.name.toLowerCase() : '';
+            const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
+            return nombre.includes(texto) || codigo.includes(texto);
+        });
+
+        renderProductAdmin(filtrados);
+    });
+}
+
+// ==========================================
+// ⚡ NUEVO: NAVEGACIÓN CON TECLA "ENTER"
+// ==========================================
+// Lista ordenada de los inputs del formulario
+const formInputs = [
+    'barcodeInput', // 1
+    'nameInput',    // 2
+    'priceInput',   // 3
+    'stockInput',   // 4
+    'tagsInput'     // 5
+];
+
+formInputs.forEach((id, index) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Evita que haga cosas raras
+
+            const nextId = formInputs[index + 1];
+
+            if (nextId) {
+                // Si hay un siguiente input, le damos foco
+                document.getElementById(nextId).focus();
+            } else {
+                // Si es el último (tagsInput), hacemos click en GUARDAR
+                document.getElementById('addProduct').click();
+                // Y regresamos el foco al inicio para seguir capturando rápido
+                setTimeout(() => {
+                    document.getElementById('barcodeInput').focus();
+                }, 100); 
+            }
+        }
+    });
+});
