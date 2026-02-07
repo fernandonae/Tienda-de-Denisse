@@ -1,4 +1,4 @@
-const Sale = require('../models/Sale');
+const Sale = require('../models/sale');
 const Product = require('../models/Product'); // 👈 IMPORTANTE: Necesitamos esto para restar stock
 
 // Crear una nueva venta
