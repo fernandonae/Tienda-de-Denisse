@@ -312,11 +312,12 @@ btnGuardarProducto?.addEventListener('click', async () => {
 // LOGICA DE CARRITO Y CAJA
 // ====================
 function renderCart() {
-  // 🔑 Tomamos SIEMPRE los elementos reales del DOM
   const cartTable = document.getElementById("cartTable");
   const totalSpan = document.getElementById("total");
   const cashInput = document.getElementById("cashInput");
   const changeSpan = document.getElementById("changeSpan");
+
+  if (!cartTable || !totalSpan) return;
 
   cartTable.innerHTML = '';
 
@@ -333,22 +334,28 @@ function renderCart() {
 
   let total = 0;
 
-  // 🛒 Pintar productos
   cart.forEach((item, index) => {
-    const subtotal = Number(item.price) * Number(item.qty);
+    const qty = Number(item.qty);
+    const price = Number(item.price);
+    const subtotal = qty * price;
     total += subtotal;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${item.name}</td>
-      <td class="text-right">${formatMoney(item.price)}</td>
+      <td class="py-2">${item.name}</td>
+      <td class="text-right">${formatMoney(price)}</td>
       <td class="text-center font-bold text-gray-700">
-        ${item.qty < 1 ? Number(item.qty).toFixed(3) : Number(item.qty)}
+        ${qty < 1 ? qty.toFixed(3) : qty}
       </td>
-      <td class="text-right flex justify-end gap-2">
-        ${formatMoney(subtotal)}
-        <button onclick="removeFromCart(${index})"
-          class="text-red-600 font-bold px-2">✖</button>
+      <td class="text-right">
+        <div class="flex justify-end items-center gap-2">
+          <span>${formatMoney(subtotal)}</span>
+          <button 
+            type="button"
+            onclick="removeFromCart(${index})"
+            class="text-red-600 font-bold px-2"
+          >✖</button>
+        </div>
       </td>
     `;
     cartTable.appendChild(tr);
@@ -358,45 +365,9 @@ function renderCart() {
   totalSpan.textContent = formatMoney(total);
 
   // 🔄 Cambio
-  const cash = Number(cashInput.value || 0);
+  const cash = Number(cashInput?.value || 0);
   changeSpan.textContent =
     cash >= total ? formatMoney(cash - total) : formatMoney(0);
-}
-
-// ❌ Eliminar producto
-function removeFromCart(index) {
-  if (!cart[index]) return;
-  cart[index].qty > 1 ? cart[index].qty-- : cart.splice(index, 1);
-  renderCart();
-}
-
-// ➕ Agregar producto (con decimales)
-function addToCart(producto, cantidad = 1) {
-  const item = cart.find(p => String(p._id) === String(producto._id));
-
-  if (item) {
-    if (item.qty + cantidad > producto.stock) {
-      alert('⚠️ Stock insuficiente');
-      return;
-    }
-    item.qty += cantidad;
-  } else {
-    cart.push({
-      _id: producto._id,
-      name: producto.name,
-      price: Number(producto.price),
-      qty: cantidad
-    });
-  }
-
-  renderCart();
-}
-
-// 🔢 Total numérico (para cálculos)
-function getTotal() {
-  return cart.reduce(
-    (sum, item) => sum + (Number(item.price) * Number(item.qty)), 0
-  );
 }
 
 
