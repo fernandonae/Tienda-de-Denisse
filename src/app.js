@@ -22,8 +22,7 @@ app.use('/api/partners', require('./routes/partner.routes'));
 //    /js/app.js
 app.use(express.static(path.resolve(__dirname, '..')));
 
-// Manejador para que cualquier ruta no encontrada cargue el index.html (Modo SPA)
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
     res.sendFile(path.resolve(__dirname, '..', 'index.html'));
 });
 
