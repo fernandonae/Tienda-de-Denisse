@@ -15,16 +15,21 @@ let productoEnEdicionId = null;
 // ELEMENTOS DEL DOM
 // ====================
 // Inputs y Tablas
-const barcodeInput = document.getElementById('barcodeInput');
-const productsDiv = document.getElementById('products'); // Vista Tarjetas (POS)
-const productList = document.getElementById('productList'); // Vista Lista (Admin)
+const productsDiv = document.getElementById('products'); 
+const productList = document.getElementById('productList'); 
 const searchInput = document.getElementById('search');
 const barcodeInputPOS = document.getElementById('barcodeInputPOS');
 const cartTable = document.getElementById('cartTable');
 const totalSpan = document.getElementById('total');
 const checkoutBtn = document.getElementById('checkoutBtn');
-const cashInput = document.getElementById('cashInput');
-const changeSpan = document.getElementById('changeSpan');
+
+// Elementos del Modal (Corregidos para el nuevo diseño)
+const modal = document.getElementById('paymentModal');
+const modalTotal = document.getElementById('modalTotal');
+const modalCashInput = document.getElementById('modalCashInput');
+const modalChange = document.getElementById('modalChange');
+const confirmPaymentBtn = document.getElementById('confirmPayment');
+const closeModalBtn = document.getElementById('closeModal');
 
 // Botones Menú
 const btnPOS = document.getElementById('btnPOS');
@@ -38,7 +43,8 @@ const productsSection = document.getElementById('productsSection');
 const reportsSection = document.getElementById('reportsSection');
 const partnersSection = document.getElementById('partnersSection');
 
-// Formulario Productos
+// Formulario Productos (Inventario)
+const barcodeInput = document.getElementById('barcodeInput');
 const nameInput = document.getElementById('nameInput');
 const priceInput = document.getElementById('priceInput');
 const stockInput = document.getElementById('stockInput');
@@ -59,7 +65,6 @@ const resultadoRango = document.getElementById('resultadoRango');
 const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 
-// Buscador Inventario
 const inventorySearch = document.getElementById('inventorySearch');
 
 // ====================
@@ -68,10 +73,9 @@ const inventorySearch = document.getElementById('inventorySearch');
 const formatMoney = n => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const hideAllSections = () => {
-  posSection?.classList.add('hidden');
-  productsSection?.classList.add('hidden');
-  reportsSection?.classList.add('hidden');
-  partnersSection?.classList.add('hidden');
+    [posSection, productsSection, reportsSection, partnersSection].forEach(section => {
+        section?.classList.add('hidden');
+    });
 };
 
 // ====================
@@ -79,33 +83,76 @@ const hideAllSections = () => {
 // ====================
 document.addEventListener('DOMContentLoaded', () => {
     console.log("App iniciada 🚀");
-    // Mensaje de carga inicial
-    if(productList) productList.innerHTML = '<p class="text-center p-4 text-gray-500 animate-pulse">⏳ Conectando con el servidor...</p>';
-    if(productsDiv) productsDiv.innerHTML = '<p class="col-span-full text-center p-4 text-gray-500 animate-pulse">⏳ Despertando servidor...</p>';
-    
     fetchProducts();
     fetchPartners();
     renderCart();
 });
+
+// 1. Definimos la función para que el navegador la conozca
+function renderProductAdmin(products) {
+    const productList = document.getElementById('productList');
+    if (!productList) return;
+    productList.innerHTML = '';
+
+    products.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'bg-white p-5 rounded-2xl shadow-sm border-2 border-gray-50 flex justify-between items-center mb-3 hover:shadow-md transition-all';
+        div.innerHTML = `
+            <div class="flex-1">
+                <h4 class="font-black text-gray-800 text-lg uppercase">${p.name}</h4>
+                <p class="text-xs text-gray-400 font-mono">${p.barcode}</p>
+                <p class="text-gray-600 font-bold mt-1">
+                    <span class="text-pink-600">${formatMoney(p.price)}</span> | Stock: ${p.stock}
+                </p>
+            </div>
+            <div class="flex gap-2">
+                <button class="edit-btn bg-yellow-400 hover:bg-yellow-500 text-white w-10 h-10 rounded-xl shadow-sm flex items-center justify-center transition-all active:scale-90">
+                    ✏️
+                </button>
+                <button class="delete-btn bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-xl shadow-sm flex items-center justify-center transition-all active:scale-90">
+                    🗑️
+                </button>
+            </div>
+        `;
+
+        // Configurar el botón de Editar
+        div.querySelector('.edit-btn').onclick = () => {
+            productoEnEdicionId = p._id; // Guardamos el ID para actualizar luego
+            
+            document.getElementById('barcodeInput').value = p.barcode || '';
+            document.getElementById('nameInput').value = p.name || '';
+            document.getElementById('priceInput').value = p.price || 0;
+            document.getElementById('stockInput').value = p.stock || 0;
+            document.getElementById('tagsInput').value = p.tags ? p.tags.join(', ') : '';
+            
+            document.getElementById('barcodeInput').disabled = true;
+            document.getElementById('addProduct').innerHTML = "<span>🔄</span> Actualizar";
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // Configurar el botón de Eliminar
+        div.querySelector('.delete-btn').onclick = async () => {
+            if (confirm(`¿Eliminar ${p.name}?`)) {
+                await fetch(`${API_URL}/products/${p._id}`, { method: 'DELETE' });
+                fetchProducts();
+            }
+        };
+
+        productList.appendChild(div);
+    });
+}
 
 async function fetchProducts() {
     try {
         const res = await fetch(`${API_URL}/products`);
         if (!res.ok) throw new Error('Error cargando productos');
         allProducts = await res.json();
-        
-        // Aseguramos que los precios sean números
         allProducts = allProducts.map(p => ({...p, price: Number(p.price)}));
-        
-        console.log("Productos cargados:", allProducts.length);
-        
         renderProducts(allProducts);
         renderProductAdmin(allProducts);
     } catch (error) {
         console.error(error);
-        const errorMsg = '<p class="text-red-500 text-center font-bold">⚠️ Error de conexión. Revisa tu internet o espera un minuto.</p>';
-        if(productList) productList.innerHTML = errorMsg;
-        if(productsDiv) productsDiv.innerHTML = errorMsg;
     }
 }
 
@@ -124,213 +171,130 @@ async function fetchPartners() {
 // ====================
 // VISTAS DE PRODUCTOS
 // ====================
-
-// 1. VISTA TARJETAS (POS)
 function renderProducts(products) {
-  if (!productsDiv) return;
-  productsDiv.innerHTML = '';
-  
-  if (products.length === 0) {
-      productsDiv.innerHTML = '<p class="col-span-full text-center text-gray-400">No hay productos en el inventario.</p>';
-      return;
-  }
-  
-  products.forEach(p => {
-    const card = document.createElement('div');
+    if (!productsDiv) return;
+    productsDiv.innerHTML = '';
     
-    // --- LÓGICA DEL SEMÁFORO ---
-    let bordeColor = 'border-transparent';
-    let estadoStock = '';
-    let opacidad = 'opacity-100';
-    let clickeable = true;
+    products.forEach(p => {
+        const card = document.createElement('div');
+        let bordeColor = 'border-pink-100';
+        let opacidad = 'opacity-100';
+        let clickeable = true;
 
-    if (p.stock > 0 && p.stock <= 5) {
-        bordeColor = 'border-orange-400 bg-orange-50';
-        estadoStock = '<span class="text-orange-600 font-bold text-xs animate-pulse">¡POCO STOCK!</span>';
-    } 
-    else if (p.stock <= 0) {
-        bordeColor = 'border-gray-200 bg-gray-100';
-        opacidad = 'opacity-60';
-        estadoStock = '<span class="text-red-600 font-bold text-xs">AGOTADO</span>';
-        clickeable = false;
-    }
+        if (p.stock > 0 && p.stock <= 5) {
+            bordeColor = 'border-orange-400 bg-orange-50';
+        } else if (p.stock <= 0) {
+            bordeColor = 'border-gray-200 bg-gray-100';
+            opacidad = 'opacity-60';
+            clickeable = false;
+        }
 
-    card.className = `p-4 rounded shadow hover:shadow-lg transition cursor-pointer border-2 ${bordeColor} ${opacidad} relative overflow-hidden`;
-    
-    card.innerHTML = `
-      <div class="flex justify-between items-start">
-          <h3 class="font-bold text-lg text-gray-800 leading-tight">${p.name}</h3>
-          ${estadoStock}
-      </div>
-      
-      <div class="flex justify-between items-center mt-3">
-          <p class="text-pink-600 font-bold text-xl">${formatMoney(p.price)}</p>
-          <p class="text-sm text-gray-600 font-medium">Stock: ${p.stock}</p>
-      </div>
-    `;
+        card.className = `product-card p-4 rounded shadow hover:shadow-lg transition cursor-pointer border-2 ${bordeColor} ${opacidad} relative`;
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <h3 class="font-bold text-lg text-gray-800 leading-tight">${p.name}</h3>
+            </div>
+            <div class="flex justify-between items-center mt-3">
+                <p class="text-pink-600 font-bold text-xl">${formatMoney(p.price)}</p>
+                <p class="text-sm text-gray-600 font-medium">Stock: ${p.stock}</p>
+            </div>
+        `;
 
-    if (clickeable) {
-        card.onclick = () => {
-            const inputGranel = document.getElementById('bulkMoneyInput');
-            const dineroCliente = inputGranel ? parseFloat(inputGranel.value) : 0;
-            let cantidadAgregar = 1;
+        if (clickeable) {
+            card.onclick = () => {
+                const inputGranel = document.getElementById('bulkMoneyInput');
+                const dinero = parseFloat(inputGranel?.value) || 0;
+                let cant = dinero > 0 ? dinero / p.price : 1;
+                if(inputGranel) inputGranel.value = '';
+                addToCart(p, cant);
+            };
+        }
+        productsDiv.appendChild(card);
+    });
+}
 
-            if (dineroCliente > 0) {
-                cantidadAgregar = dineroCliente / p.price;
-                if(inputGranel) inputGranel.value = ''; 
+// ==========================================
+// 💾 FUNCIÓN MAESTRA: GUARDAR O ACTUALIZAR
+// ==========================================
+const btnGuardar = document.getElementById('addProduct');
+
+if (btnGuardar) {
+    btnGuardar.onclick = async () => {
+        // 1. Capturamos los datos con IDs directos
+        const nameInput = document.getElementById('nameInput');
+        const priceInput = document.getElementById('priceInput');
+        const stockInput = document.getElementById('stockInput');
+        const barcodeInput = document.getElementById('barcodeInput');
+        const tagsInput = document.getElementById('tagsInput');
+
+        const name = nameInput.value.trim();
+        const price = parseFloat(priceInput.value);
+        const stock = parseInt(stockInput.value) || 0;
+        const barcode = barcodeInput.value.trim();
+        const tags = tagsInput.value.split(',').map(t => t.trim().toLowerCase()).filter(t => t !== "");
+
+        // Validación
+        if (!name || isNaN(price)) {
+            alert("⚠️ Por favor, llena el nombre y el precio.");
+            return;
+        }
+
+        // 2. Lógica de Decisión (POST o PUT)
+        const esEdicion = productoEnEdicionId !== null;
+        const url = esEdicion 
+            ? `${API_URL}/products/${productoEnEdicionId}` 
+            : `${API_URL}/products`;
+        const metodo = esEdicion ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ barcode, name, price, stock, tags })
+            });
+
+            if (res.ok) {
+                alert(esEdicion ? "✨ ¡Producto actualizado!" : "✅ ¡Producto guardado!");
+                
+                // 3. RESETEAR FORMULARIO Y VARIABLE GLOBAL
+                productoEnEdicionId = null; 
+                
+                nameInput.value = '';
+                priceInput.value = '';
+                stockInput.value = '';
+                barcodeInput.value = '';
+                tagsInput.value = '';
+                
+                // 4. RESTAURAR ESTADO DEL BOTÓN E INPUT
+                barcodeInput.disabled = false;
+                barcodeInput.classList.remove('bg-gray-100');
+                
+                btnGuardar.innerHTML = "Guardar Producto";
+                // Limpiamos colores de edición y ponemos el original
+                btnGuardar.classList.remove('bg-pink-500', 'bg-yellow-500'); 
+                btnGuardar.classList.add('bg-pink-600');
+
+                // 5. RECARGAR LISTAS
+                fetchProducts(); 
+                
+            } else {
+                const errorData = await res.json();
+                alert("❌ Error: " + (errorData.message || "No se pudo procesar"));
             }
-            addToCart(p, cantidadAgregar);
-            
-            // Efecto visual
-            card.style.transform = "scale(0.95)";
-            setTimeout(() => card.style.transform = "scale(1)", 100);
-        };
-    } else {
-        card.style.cursor = 'not-allowed';
-    }
-
-    productsDiv.appendChild(card);
-  });
-}
-
-// 2. VISTA LISTA (ADMIN)
-function renderProductAdmin(products) {
-  if (!productList) return;
-  productList.innerHTML = '';
-
-  if (products.length === 0) {
-      productList.innerHTML = '<p class="text-center text-gray-400 py-4">No se encontraron productos.</p>';
-      return;
-  }
-
-  products.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'bg-white p-3 rounded shadow flex justify-between items-center mb-2 border-l-4 border-pink-200';
-    div.innerHTML = `
-      <div>
-        <strong>${p.name}</strong>
-        <p class="text-xs text-gray-500">${p.barcode}</p>
-        <p class="text-sm">${formatMoney(p.price)} | Stock: ${p.stock}</p>
-      </div>
-      <div class="flex gap-2">
-        <button class="edit bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-1 rounded shadow">✏️</button>
-        <button class="delete bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow">🗑️</button>
-      </div>
-    `;
-
-    // EDITAR
-    div.querySelector('.edit').onclick = () => {
-        barcodeInput.value = p.barcode;
-        nameInput.value = p.name;
-        priceInput.value = p.price;
-        stockInput.value = p.stock;
-        tagsInput.value = p.tags ? p.tags.join(',') : '';
-
-        barcodeInput.disabled = true;
-        barcodeInput.classList.add('bg-gray-200');
-
-        productoEnEdicionId = p._id;
-        btnGuardarProducto.textContent = "🔄 Actualizar";
-        btnGuardarProducto.classList.remove('bg-pink-600');
-        btnGuardarProducto.classList.add('bg-yellow-500');
-
-        productsSection.scrollIntoView({ behavior: 'smooth' });
+        } catch (err) {
+            console.error("Error en el fetch:", err);
+            alert("📡 Error de conexión con el servidor.");
+        }
     };
-
-    // ELIMINAR
-    div.querySelector('.delete').onclick = async () => {
-      if (!confirm(`Eliminar ${p.name}?`)) return;
-      try {
-          await fetch(`${API_URL}/products/${p._id}`, { method: 'DELETE' });
-          fetchProducts();
-      } catch (err) {
-          alert('Error al eliminar');
-      }
-    };
-    productList.appendChild(div);
-  });
 }
-
-// ====================
-// GUARDAR / EDITAR PRODUCTO
-// ====================
-btnGuardarProducto?.addEventListener('click', async () => {
-  const barcode = barcodeInput.value.trim();
-  const name = nameInput.value.trim();
-  const price = Number(priceInput.value);
-  const stock = Number(stockInput.value);
-  const tags = tagsInput.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-
-  if (!barcode || !name || !price || !stock) {
-    alert('Completa todos los campos');
-    return;
-  }
-
-  btnGuardarProducto.disabled = true;
-
-  try {
-      let res;
-      if (productoEnEdicionId) {
-          // EDITAR
-          res = await fetch(`${API_URL}/products/${productoEnEdicionId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, stock, tags }) 
-          });
-      } else {
-          // CREAR
-          res = await fetch(`${API_URL}/products`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ barcode, name, price, stock, tags })
-          });
-      }
-
-      if (res.ok) {
-        alert(productoEnEdicionId ? 'Producto Actualizado 🔄' : 'Producto Guardado ✅');
-        fetchProducts();
-        
-        // LIMPIAR
-        barcodeInput.value = ''; nameInput.value = ''; 
-        priceInput.value = ''; stockInput.value = ''; tagsInput.value = '';
-        
-        // RESTAURAR
-        productoEnEdicionId = null;
-        barcodeInput.disabled = false;
-        barcodeInput.classList.remove('bg-gray-200');
-        btnGuardarProducto.textContent = "Guardar Producto";
-        btnGuardarProducto.classList.add('bg-pink-600');
-        btnGuardarProducto.classList.remove('bg-yellow-500');
-        
-        // Foco al inicio
-        barcodeInput.focus();
-      } else {
-          const err = await res.json();
-          alert('Error: ' + (err.message || 'Código duplicado'));
-      }
-  } catch (error) {
-      console.error(error);
-      alert('Error de conexión');
-  } finally {
-      btnGuardarProducto.disabled = false;
-  }
-});
 
 // ====================
 // 🛒 LÓGICA CARRITO
 // ====================
 function addToCart(product, quantity = 1) {
-    const existingItem = cart.find(item => item._id === product._id);
-    if (existingItem) {
-        existingItem.qty += quantity;
-    } else {
-        cart.push({
-            _id: product._id,
-            name: product.name,
-            price: Number(product.price),
-            qty: quantity
-        });
-    }
+    const existing = cart.find(item => item._id === product._id);
+    if (existing) { existing.qty += quantity; } 
+    else { cart.push({ _id: product._id, name: product.name, price: product.price, qty: quantity }); }
     renderCart();
 }
 
@@ -339,222 +303,211 @@ function removeFromCart(index) {
     renderCart();
 }
 
-function getTotal() {
-    return cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-}
-
 function renderCart() {
-  if (!cartTable || !totalSpan) return;
-  cartTable.innerHTML = '';
+    if (!cartTable || !totalSpan) return;
+    cartTable.innerHTML = '';
+    let total = 0;
 
-  if (cart.length === 0) {
-    cartTable.innerHTML = `
-      <tr class="text-center text-gray-400">
-        <td colspan="4" class="py-6">Sin productos</td>
-      </tr>`;
-    totalSpan.textContent = formatMoney(0);
-    changeSpan.textContent = formatMoney(0);
-    return;
-  }
-
-  let total = 0;
-  cart.forEach((item, index) => {
-    const qty = Number(item.qty);
-    const price = Number(item.price);
-    const subtotal = qty * price;
-    total += subtotal;
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="py-2">${item.name}</td>
-      <td class="text-right">${formatMoney(price)}</td>
-      <td class="text-center font-bold text-gray-700">
-        ${qty < 1 ? qty.toFixed(3) : qty}
-      </td>
-      <td class="text-right">
-        <div class="flex justify-end items-center gap-2">
-          <span>${formatMoney(subtotal)}</span>
-          <button type="button" onclick="removeFromCart(${index})" class="text-red-600 font-bold px-2">✖</button>
-        </div>
-      </td>
-    `;
-    cartTable.appendChild(tr);
-  });
-
-  totalSpan.textContent = formatMoney(total);
-  const cash = Number(cashInput?.value || 0);
-  changeSpan.textContent = cash >= total ? formatMoney(cash - total) : formatMoney(0);
+    cart.forEach((item, index) => {
+        const subtotal = item.qty * item.price;
+        total += subtotal;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="py-2 text-left pl-2">${item.name}</td>
+            <td class="text-right">${formatMoney(item.price)}</td>
+            <td class="text-center">${item.qty < 1 ? item.qty.toFixed(3) : item.qty}</td>
+            <td class="text-right pr-2">
+                ${formatMoney(subtotal)} <button onclick="removeFromCart(${index})" class="text-red-500 ml-2">✖</button>
+            </td>
+        `;
+        cartTable.appendChild(tr);
+    });
+    totalSpan.textContent = formatMoney(total);
 }
 
 // ====================
-// NAVEGACIÓN
+// 💸 PROCESO DE COBRO (MODAL)
 // ====================
-btnPOS.onclick = () => { hideAllSections(); posSection.classList.remove('hidden'); renderCart();};
+checkoutBtn?.addEventListener('click', () => {
+    if (cart.length === 0) return;
+    const total = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
+    modalTotal.textContent = formatMoney(total);
+    modalCashInput.value = '';
+    modalChange.textContent = formatMoney(0);
+    modal?.classList.remove('hidden');
+    setTimeout(() => modalCashInput.focus(), 200);
+});
+
+modalCashInput?.addEventListener('input', () => {
+    const total = parseFloat(modalTotal.textContent.replace(/[^0-9.-]+/g,"")) || 0;
+    const pago = parseFloat(modalCashInput.value) || 0;
+    const cambio = pago - total;
+    modalChange.textContent = cambio > 0 ? formatMoney(cambio) : formatMoney(0);
+});
+
+closeModalBtn?.addEventListener('click', () => modal.classList.add('hidden'));
+
+confirmPaymentBtn?.addEventListener('click', async () => {
+    const total = parseFloat(modalTotal.textContent.replace(/[^0-9.-]+/g,"")) || 0;
+    const pago = parseFloat(modalCashInput.value) || 0;
+
+    if (pago < total) { alert("Pago insuficiente"); return; }
+
+    const saleData = {
+        products: cart.map(i => ({ product: i._id, quantity: i.qty, price: i.price })),
+        total: total,
+        paymentMethod: 'efectivo'
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/sales`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(saleData)
+        });
+
+        if (res.ok) {
+            alert("Venta guardada ✅");
+            cart = [];
+            renderCart();
+            modal.classList.add('hidden');
+            fetchProducts();
+        }
+    } catch (e) { alert("Error al guardar venta"); }
+});
+
+// ====================
+// NAVEGACIÓN Y OTROS
+// ====================
+btnPOS.onclick = () => { hideAllSections(); posSection.classList.remove('hidden'); };
 btnProducts.onclick = () => { hideAllSections(); productsSection.classList.remove('hidden'); };
 btnReports.onclick = () => { hideAllSections(); reportsSection.classList.remove('hidden'); };
 btnPartners.onclick = () => { hideAllSections(); partnersSection.classList.remove('hidden'); fetchPartners(); };
 
-// ====================
-// 🔍 BUSCADORES
-// ====================
-// 1. Buscador POS
-if (searchInput) {
-  searchInput.addEventListener('input', (e) => {
-    const texto = e.target.value.trim().toLowerCase();
-    if (!texto) { renderProducts(allProducts); return; }
-    const filtrados = allProducts.filter(p => {
-        const nombre = p.name ? p.name.toLowerCase() : '';
-        const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
-        if (nombre.includes(texto) || codigo.includes(texto)) return true;
-        if (p.tags && Array.isArray(p.tags)) return p.tags.some(tag => tag.toLowerCase().includes(texto));
-        return false;
-    });
-    renderProducts(filtrados);
-  });
-}
+// Buscador POS
+searchInput?.addEventListener('input', (e) => {
+    const text = e.target.value.toLowerCase();
+    const filtered = allProducts.filter(p => p.name.toLowerCase().includes(text) || p.barcode.includes(text));
+    renderProducts(filtered);
+});
 
-// 2. Buscador INVENTARIO (ADMIN)
-if (inventorySearch) {
+/// Buscador INVENTARIO (Admin)
+// Quitamos el "const" porque la variable ya fue declarada arriba del todo
+if (inventorySearch) { 
     inventorySearch.addEventListener('input', (e) => {
-        const texto = e.target.value.trim().toLowerCase();
-        if (!texto) {
-            renderProductAdmin(allProducts);
-            return;
-        }
-        const filtrados = allProducts.filter(p => {
-            const nombre = p.name ? p.name.toLowerCase() : '';
-            const codigo = p.barcode ? String(p.barcode).toLowerCase() : '';
-            return nombre.includes(texto) || codigo.includes(texto);
-        });
-        renderProductAdmin(filtrados);
+        const text = e.target.value.toLowerCase().trim();
+        // Filtramos la lista global 'allProducts'
+        const filtered = allProducts.filter(p => 
+            p.name.toLowerCase().includes(text) || 
+            String(p.barcode).includes(text)
+        );
+        // Mandamos los resultados a la lista de administración
+        renderProductAdmin(filtered);
     });
 }
-
-// ====================
-// ESCÁNER POS
-// ====================
+// Escáner Código de Barras
 barcodeInputPOS?.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  
-  const codigo = barcodeInputPOS.value.trim();
-  const producto = allProducts.find(p => String(p.barcode).trim() === codigo);
-  
-  if (!producto) { alert('❌ No encontrado'); barcodeInputPOS.value = ''; return; }
-  if (producto.stock <= 0) { alert('⚠️ Sin stock'); return; }
-
-  addToCart(producto);
-  barcodeInputPOS.value = '';
-});
-
-cashInput.addEventListener('input', () => {
-  const total = getTotal();
-  const cash = Number(cashInput.value);
-  if (isNaN(cash) || cash < total) { changeSpan.textContent = formatMoney(0); return; }
-  changeSpan.textContent = formatMoney(cash - total);
-});
-
-// ====================
-// CHECKOUT
-// ====================
-checkoutBtn.addEventListener('click', async () => {
-  if (cart.length === 0) return;
-  const total = getTotal();
-  const cash = Number(cashInput.value);
-
-  const products = cart.map(item => ({ 
-      product: item._id, 
-      quantity: item.qty,
-      price: Number(item.price)
-  }));
-
-  try {
-      const res = await fetch(`${API_URL}/sales`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-              products, 
-              total: total, 
-              paymentMethod: 'efectivo' 
-          })
-      });
-
-      if(res.ok) {
-          alert(`✅ Venta realizada\nCambio: ${formatMoney(cash >= total ? cash - total : 0)}`);
-          cart = [];
-          cashInput.value = '';
-          changeSpan.textContent = formatMoney(0);
-          renderCart();
-          fetchProducts(); 
-      } else {
-          const errorData = await res.json();
-          alert('Error: ' + errorData.message);
-      }
-  } catch (error) {
-      alert('Error de conexión');
-  }
-});
-
-// ====================
-// SOCIOS
-// ====================
-function renderPartners(partners) {
-  partnerList.innerHTML = '';
-  partners.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'bg-white p-3 rounded shadow flex justify-between';
-    div.innerHTML = `
-      <div><strong>${p.name}</strong> <span class="text-gray-500">#${p.tag}</span></div>
-      <button class="bg-red-600 text-white px-2 py-1 rounded delete-partner">Eliminar</button>
-    `;
-    div.querySelector('.delete-partner').onclick = async () => {
-      if (!confirm(`Eliminar socio ${p.name}?`)) return;
-      await fetch(`${API_URL}/partners/${p._id}`, { method: 'DELETE' });
-      fetchPartners();
-    };
-    partnerList.appendChild(div);
-  });
-}
-
-addPartnerBtn?.addEventListener('click', async () => {
-  const name = partnerName.value.trim();
-  const tag = partnerTag.value.trim().toLowerCase();
-  if (!name || !tag) { alert('Completa los campos'); return; }
-
-  try {
-    const res = await fetch(`${API_URL}/partners`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, tag })
-    });
-    if(res.ok) {
-        partnerName.value = ''; partnerTag.value = ''; fetchPartners();
-    } else { alert('Error al guardar socio'); }
-  } catch (error) { alert('Error de red'); }
-});
-
-// ====================
-// REPORTES
-// ====================
-btnReporteDia?.addEventListener('click', async () => {
-    resultadoDia.classList.remove('hidden');
-    resultadoDia.innerHTML = '<p class="text-gray-500 animate-pulse">Cargando...</p>';
-    try {
-        const res = await fetch(`${API_URL}/sales`);
-        if (!res.ok) throw new Error('Error al obtener ventas');
-        const ventas = await res.json();
-        const hoy = new Date().toLocaleDateString('en-CA'); 
-        const ventasHoy = ventas.filter(v => v.createdAt && v.createdAt.substring(0, 10) === hoy);
-        mostrarResultados(ventasHoy, resultadoDia);
-    } catch (error) {
-        resultadoDia.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+    if (e.key === 'Enter') {
+        const p = allProducts.find(prod => prod.barcode === barcodeInputPOS.value.trim());
+        if(p) { addToCart(p); barcodeInputPOS.value = ''; }
+        else { alert("No encontrado"); barcodeInputPOS.value = ''; }
     }
 });
 
+/// Renderizar Socios (Diseño Mejorado)
+function renderPartners(partners) {
+    if(!partnerList) return;
+    partnerList.innerHTML = '';
+    
+    if (partners.length === 0) {
+        partnerList.innerHTML = '<p class="text-center text-gray-400 py-4 italic">No hay socios registrados</p>';
+        return;
+    }
+
+    partners.forEach(p => {
+        const div = document.createElement('div');
+        // Diseño de tarjeta moderna igual al Inventario
+        div.className = 'bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center mb-3 hover:shadow-md transition-all';
+        div.innerHTML = `
+            <div>
+                <span class="font-black text-gray-800 text-lg">${p.name}</span>
+                <span class="ml-2 px-2 py-1 bg-pink-100 text-pink-600 text-xs font-bold rounded-lg uppercase">#${p.tag}</span>
+            </div>
+            <button class="del-p bg-red-50 hover:bg-red-500 hover:text-white text-red-500 w-10 h-10 rounded-xl transition-all font-bold flex items-center justify-center">
+                🗑️
+            </button>
+        `;
+
+        div.querySelector('.del-p').onclick = async () => {
+            if (!confirm(`¿Eliminar al socio ${p.name}?`)) return;
+            try {
+                await fetch(`${API_URL}/partners/${p._id}`, { method: 'DELETE' });
+                fetchPartners();
+            } catch (error) { alert('Error al eliminar'); }
+        };
+        partnerList.appendChild(div);
+    });
+}
+
+// ESTE ES EL QUE HACÍA FALTA: El evento del botón "Agregar"
+
+addPartnerBtn?.addEventListener('click', async () => {
+    const name = document.getElementById('partnerName').value.trim();
+    const tag = document.getElementById('partnerTag').value.trim().toLowerCase();
+
+    if (!name || !tag) {
+        alert('Llena nombre y tag (ej: Mamá, m)');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/partners`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, tag })
+        });
+
+        if(res.ok) {
+            document.getElementById('partnerName').value = '';
+            document.getElementById('partnerTag').value = '';
+            fetchPartners(); // Recarga la lista automáticamente
+        } else {
+            alert('Error al guardar socio. Quizás el tag ya existe.');
+        }
+    } catch (error) { alert('Error de conexión'); }
+});
+
+// Botón Limpiar Granel
+document.getElementById('clearBulk')?.addEventListener('click', () => {
+    document.getElementById('bulkMoneyInput').value = '';
+});
+
+// ====================
+// 📊 SECCIÓN DE REPORTES (CORREGIDA)
+// ====================
+
+// Reporte de Hoy
+btnReporteDia?.addEventListener('click', async () => {
+    resultadoDia.classList.remove('hidden');
+    resultadoDia.innerHTML = '<p class="text-gray-500 animate-pulse">Cargando ventas de hoy...</p>';
+    try {
+        const res = await fetch(`${API_URL}/sales`);
+        const ventas = await res.json();
+        const hoy = new Date().toISOString().substring(0, 10); // Formato YYYY-MM-DD
+        
+        const ventasHoy = ventas.filter(v => v.createdAt && v.createdAt.substring(0, 10) === hoy);
+        mostrarResultados(ventasHoy, resultadoDia);
+    } catch (error) {
+        resultadoDia.innerHTML = `<p class="text-red-500">Error al cargar: ${error.message}</p>`;
+    }
+});
+
+// Reporte por Rango de Fechas
 btnReporteRango?.addEventListener('click', async () => {
     const inicio = startDateInput.value;
     const fin = endDateInput.value;
-    if (!inicio || !fin) { alert('Selecciona fechas'); return; }
+    if (!inicio || !fin) { alert('Selecciona ambas fechas'); return; }
+
     resultadoRango.classList.remove('hidden');
     resultadoRango.innerHTML = '<p class="text-gray-500 animate-pulse">Calculando...</p>';
     try {
@@ -571,103 +524,128 @@ btnReporteRango?.addEventListener('click', async () => {
     }
 });
 
+// Función que dibuja los cuadritos de dinero y socios
 function mostrarResultados(listaVentas, contenedorDiv) {
     if (listaVentas.length === 0) {
-        contenedorDiv.innerHTML = '<p class="text-center text-gray-500">No hay ventas.</p>';
+        contenedorDiv.innerHTML = '<p class="text-center text-gray-500 py-4">No hay ventas en este periodo.</p>';
         return;
     }
+
     let totalGeneral = 0;
     const porSocio = {}; 
+
     listaVentas.forEach(v => {
         totalGeneral += Number(v.total);
         if (v.products && Array.isArray(v.products)) {
             v.products.forEach(item => {
-                if (!item.product) {
-                     if(item.price) porSocio['GENERAL'] = (porSocio['GENERAL'] || 0) + (item.price * item.quantity);
-                     return; 
-                }
-                const idProd = item.product._id || item.product;
-                const productoInfo = allProducts.find(p => String(p._id) === String(idProd)); 
-                let precio = Number(item.price) || 0; 
-                if(precio === 0 && productoInfo) precio = Number(productoInfo.price);
-                const subtotal = precio * item.quantity;
+                // Buscamos el tag del producto para saber de qué socio es
+                const idProd = item.product?._id || item.product;
+                const productoInfo = allProducts.find(p => String(p._id) === String(idProd));
+                
                 let tagSocio = 'GENERAL';
                 if (productoInfo && productoInfo.tags && productoInfo.tags.length > 0) {
                     tagSocio = productoInfo.tags[0].toUpperCase();
                 }
+
+                const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 0);
                 porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
             });
         }
     });
 
     let html = `
-        <div class="flex justify-between items-center border-b pb-2 mb-2">
-            <span class="text-lg font-bold text-gray-700">TOTAL:</span>
-            <span class="text-2xl font-bold text-green-600">${formatMoney(totalGeneral)}</span>
+        <div class="bg-green-50 p-4 rounded-xl border-2 border-green-200 mb-4">
+            <p class="text-green-800 font-bold text-sm uppercase">Venta Total</p>
+            <p class="text-3xl font-black text-green-600">${formatMoney(totalGeneral)}</p>
         </div>
-        <div class="text-sm text-gray-600 space-y-1">
-            <p class="font-bold mb-1">Desglose:</p>
+        <div class="space-y-2">
+            <p class="font-bold text-gray-700 border-b pb-1 text-sm">DIVISIÓN POR SOCIOS:</p>
     `;
+
     for (const [tag, monto] of Object.entries(porSocio)) {
-        html += `<div class="flex justify-between"><span class="uppercase">👤 ${tag}</span><span class="font-medium">${formatMoney(monto)}</span></div>`;
+        html += `
+            <div class="flex justify-between bg-white p-2 rounded border shadow-sm">
+                <span class="font-bold text-gray-600">👤 ${tag}</span>
+                <span class="font-black text-gray-800">${formatMoney(monto)}</span>
+            </div>
+        `;
     }
     html += `</div>`;
     contenedorDiv.innerHTML = html;
 }
 
+// Función de Excel (Para que no falle)
 window.exportarExcel = async function() {
     try {
         const res = await fetch(`${API_URL}/sales`);
-        if (!res.ok) throw new Error('Error al bajar historial');
         const ventas = await res.json();
-        if (ventas.length === 0) { alert('No hay ventas'); return; }
-        let csv = 'Fecha,Total,Detalle\n';
+        let csv = 'Fecha,Total,Metodo,Detalle\n';
         ventas.forEach(v => {
-            const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin fecha';
-            let detalle = 'Sin productos';
+            const f = v.createdAt ? v.createdAt.substring(0, 10) : 'S/F';
+            csv += `${f},${v.total},${v.paymentMethod || 'efectivo'},"Venta de productos"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Ventas_Tienda.csv`;
+        link.click();
+    } catch (e) { alert("Error al exportar"); }
+};
+
+// ====================
+// 📥 FUNCIÓN EXPORTAR A EXCEL (CSV)
+// ====================
+window.exportarExcel = async function() {
+    try {
+        console.log("Generando Excel...");
+        const res = await fetch(`${API_URL}/sales`);
+        if (!res.ok) throw new Error('No se pudieron obtener las ventas');
+        
+        const ventas = await res.json();
+        if (ventas.length === 0) {
+            alert('No hay ventas registradas para exportar.');
+            return;
+        }
+
+        // Encabezados del CSV
+        let csv = 'Fecha,Total,Metodo de Pago,Productos\n';
+
+        ventas.forEach(v => {
+            const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin Fecha';
+            const total = v.total || 0;
+            const metodo = v.paymentMethod || 'efectivo';
+            
+            // Crear el detalle de productos (limpiando comas para que no rompan el CSV)
+            let detalle = "Venta";
             if (v.products && Array.isArray(v.products)) {
                 detalle = v.products.map(p => {
-                   if(!p.product) return 'Borrado';
-                   const idProd = p.product._id || p.product;
-                   const info = allProducts.find(prod => String(prod._id) === String(idProd));
-                   return info ? `${info.name} (${p.quantity})` : 'Borrado';
-                }).join(' | ');
+                    const idProd = p.product?._id || p.product;
+                    const info = allProducts.find(prod => String(prod._id) === String(idProd));
+                    const nombre = info ? info.name : "Producto";
+                    return `${nombre} (x${p.quantity})`;
+                }).join(' - ');
             }
-            csv += `${fecha},${v.total},"${detalle}"\n`;
+
+            // Agregamos la fila al CSV (encerrando el detalle en comillas por si tiene guiones)
+            csv += `${fecha},${total},${metodo},"${detalle}"\n`;
         });
+
+        // Crear el archivo y descargarlo
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
+        
+        const fechaArchivo = new Date().toLocaleDateString().replace(/\//g, '-');
         link.href = url;
-        link.download = `Ventas.csv`;
+        link.download = `Reporte_Ventas_Denisse_${fechaArchivo}.csv`;
+        
+        document.body.appendChild(link);
         link.click();
-    } catch (error) { alert('Error al generar Excel'); }
+        document.body.removeChild(link);
+        
+        console.log("Excel descargado ✅");
+    } catch (error) {
+        console.error("Error en Excel:", error);
+        alert('Hubo un error al generar el archivo. Revisa la consola.');
+    }
 };
-
-document.getElementById('clearBulk')?.addEventListener('click', () => {
-    document.getElementById('bulkMoneyInput').value = '';
-});
-
-// ==========================================
-// ⚡ NAVEGACIÓN CON TECLA "ENTER"
-// ==========================================
-const formInputs = ['barcodeInput', 'nameInput', 'priceInput', 'stockInput', 'tagsInput'];
-
-formInputs.forEach((id, index) => {
-    const input = document.getElementById(id);
-    if (!input) return;
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const nextId = formInputs[index + 1];
-            if (nextId) {
-                document.getElementById(nextId).focus();
-            } else {
-                // Último campo: Click en guardar
-                document.getElementById('addProduct').click();
-                setTimeout(() => { document.getElementById('barcodeInput').focus(); }, 100); 
-            }
-        }
-    });
-});

@@ -2,209 +2,192 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Punto de Venta</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .overflow-y-auto { -webkit-overflow-scrolling: touch; }
+    .product-card {
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 2px solid #fce7f3;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .product-card:active { transform: scale(0.95); }
+    #paymentModal.hidden { display: none; }
+    #paymentModal { display: flex; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
 </head>
 
 <body class="bg-pink-50 h-screen flex flex-col overflow-hidden">
 
-  <nav class="bg-pink-600 text-white px-6 py-3 flex gap-6 shadow z-50 shrink-0">
-    <button id="btnPOS" class="font-bold text-lg border-b-2 border-white">POS</button>
-    <button id="btnProducts" class="opacity-80 hover:opacity-100 hover:text-pink-100 transition">Productos</button>
-    <button id="btnReports" class="opacity-80 hover:opacity-100 hover:text-pink-100 transition">Reportes</button>
-    <button id="btnPartners" class="opacity-80 hover:opacity-100 hover:text-pink-100 transition">Socios</button>
+  <div id="paymentModal" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border-4 border-pink-500">
+      <div class="bg-pink-600 p-6 text-center text-white">
+        <h3 class="text-2xl font-black uppercase">Finalizar Venta</h3>
+      </div>
+      <div class="p-8 space-y-6">
+        <div class="text-center">
+          <p class="text-gray-500 font-bold uppercase text-sm">Total a Pagar</p>
+          <div class="text-5xl font-black text-gray-800" id="modalTotal">$0.00</div>
+        </div>
+        <div class="bg-gray-50 p-6 rounded-2xl border-2 border-pink-100">
+          <label class="block text-center text-pink-700 font-black mb-3 uppercase">¿Con cuánto pagan?</label>
+          <div class="relative">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-3xl font-bold text-pink-300">$</span>
+            <input id="modalCashInput" type="number" step="0.01" class="w-full bg-white border-4 border-pink-200 rounded-2xl py-4 pr-4 pl-12 text-right text-4xl font-black outline-none shadow-inner" placeholder="0.00">
+          </div>
+        </div>
+        <div class="flex justify-between items-center px-4">
+          <span class="text-xl font-bold text-gray-400 font-mono italic">Su cambio:</span>
+          <span id="modalChange" class="text-4xl font-black text-green-600">$0.00</span>
+        </div>
+        <div class="grid grid-cols-2 gap-4 pt-4">
+          <button id="closeModal" class="bg-gray-100 text-gray-500 py-4 rounded-2xl font-bold">Cancelar</button>
+          <button id="confirmPayment" class="bg-green-500 text-white py-4 rounded-2xl font-bold shadow-lg">✔ Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bg-pink-600 text-white px-6 py-4 flex gap-6 shadow z-50 shrink-0">
+    <button id="btnPOS" class="font-bold text-xl border-b-2 border-white">POS</button>
+    <button id="btnProducts" class="opacity-80 hover:opacity-100 text-lg">Productos</button>
+    <button id="btnReports" class="opacity-80 hover:opacity-100 text-lg">Reportes</button>
+    <button id="btnPartners" class="opacity-80 hover:opacity-100 text-lg">Socios</button>
   </nav>
 
-  <main class="flex-1 p-4 md:p-6 overflow-hidden relative">
+  <main class="flex-1 p-2 md:p-4 overflow-hidden relative">
 
     <section id="posSection" class="bg-white rounded-2xl shadow-lg grid grid-cols-1 md:grid-cols-3 h-full overflow-hidden">
-      
       <div class="md:col-span-2 p-4 border-r flex flex-col h-full bg-gray-50 overflow-hidden">
-        <h2 class="text-2xl font-bold text-gray-800 mb-3 flex items-center gap-2 shrink-0">
-            🛍️ Productos
-        </h2>
-
-        <div class="bg-yellow-50 p-2 rounded-lg mb-3 border border-yellow-300 flex flex-col gap-2 shadow-sm shrink-0">
-            <div class="flex justify-between items-center">
-                <label class="text-xs font-bold text-yellow-800 uppercase flex items-center gap-1">
-                    💰 Venta por Dinero:
-                </label>
-                <button id="clearBulk" class="text-xs text-gray-400 hover:text-red-500 font-bold px-2">Borrar ✖</button>
+        <h2 class="text-2xl font-bold text-gray-800 mb-3 shrink-0">🛍️ Productos</h2>
+        <div class="bg-yellow-50 p-3 rounded-xl mb-3 border border-yellow-300 shrink-0">
+            <div class="flex justify-between mb-1">
+                <label class="text-sm font-bold text-yellow-800">💰 Venta por Dinero:</label>
+                <button id="clearBulk" class="text-xs text-red-500 font-bold px-2 bg-white rounded border">Borrar</button>
             </div>
             <div class="relative">
-                <span class="absolute left-3 top-2 text-gray-500 font-bold">$</span>
-                <input 
-                id="bulkMoneyInput" 
-                type="number" 
-                placeholder="Ej: 10" 
-                class="w-full pl-6 p-1.5 rounded border border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 font-bold text-gray-800"
-                >
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-xl">$</span>
+                <input id="bulkMoneyInput" type="number" class="w-full pl-10 p-3 rounded-lg border-2 border-yellow-400 font-bold text-xl outline-none">
             </div>
         </div>
-
         <div class="flex flex-col gap-2 mb-3 shrink-0">
-            <input
-            id="search"
-            type="text"
-            placeholder="🔍 Buscar producto..."
-            class="w-full p-2 rounded-lg border border-pink-300 focus:ring-2 focus:ring-pink-400 outline-none shadow-sm"
-            />
-            <input
-            id="barcodeInputPOS"
-            type="text"
-            placeholder="📲 Escanear código..."
-            class="w-full p-2 rounded-lg border-2 border-pink-400 focus:ring-2 focus:ring-pink-500 outline-none"
-            />
+            <input id="search" type="text" placeholder="🔍 Buscar..." class="w-full p-4 rounded-xl border border-pink-300 text-lg outline-none" />
+            <input id="barcodeInputPOS" type="text" placeholder="📲 Escanear..." class="w-full p-4 rounded-xl border-2 border-pink-400 text-lg outline-none" />
         </div>
-
-        <div id="products" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto content-start pb-20">
-            </div>
+        <div id="products" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto pb-20 p-1"></div>
       </div>
 
-      <div class="p-4 flex flex-col h-full bg-white z-10 shadow-xl md:shadow-none border-l">
-        <h2 class="text-2xl font-bold text-pink-600 mb-3 flex items-center gap-2 shrink-0">
-            🧾 Ticket
-        </h2>
-
-        <div class="flex-1 overflow-y-auto bg-gray-50 rounded-lg border p-2 mb-3">
+      <div class="p-4 flex flex-col h-full bg-white z-10 border-l">
+        <h2 class="text-2xl font-bold text-pink-600 mb-3 shrink-0">🧾 Ticket</h2>
+        <div class="flex-1 overflow-y-auto bg-gray-50 rounded-xl border p-2 mb-3">
           <table class="w-full text-sm">
-            <thead class="bg-gray-100 sticky top-0">
-              <tr class="border-b text-gray-600">
-                <th class="py-2 text-left pl-2">Prod</th>
-                <th class="py-2 text-right">$$</th>
-                <th class="py-2 text-center">Cant</th>
-                <th class="py-2 text-right pr-2">Total</th>
-              </tr>
-            </thead>
-            <tbody id="cartTable">
-              <tr class="text-center text-gray-400">
-                <td colspan="4" class="py-10 italic">Carrito vacío</td>
-              </tr>
-            </tbody>
+            <thead class="bg-gray-100 sticky top-0"><tr class="border-b text-gray-600"><th class="py-3 text-left pl-2">Prod</th><th class="py-3 text-right">$$</th><th class="py-3 text-center">Cant</th><th class="py-3 text-right pr-2">Total</th></tr></thead>
+            <tbody id="cartTable"></tbody>
           </table>
         </div>
-
-        <div class="bg-pink-50 p-4 rounded-xl border border-pink-100 shrink-0">
-            <div class="flex justify-between text-2xl font-bold mb-3 text-gray-800">
-                <span>Total:</span>
-                <span class="text-pink-600"><span id="total">$0.00</span></span>
-            </div>
-
-            <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                    <label class="text-sm font-bold text-gray-600 w-24">Paga con:</label>
-                    <div class="relative flex-1">
-                        <span class="absolute left-2 top-2 text-gray-400">$</span>
-                        <input
-                        id="cashInput"
-                        type="number"
-                        min="0"
-                        placeholder="0.00"
-                        class="w-full border-2 border-gray-300 rounded-lg pl-6 pr-2 py-1 text-right text-lg font-bold focus:border-pink-500 outline-none"
-                        />
-                    </div>
-                </div>
-
-                <div class="flex justify-between text-lg font-bold text-gray-700 bg-white p-2 rounded border">
-                    <span>Cambio:</span>
-                    <span id="changeSpan" class="text-green-600">$0.00</span>
-                </div>
-            </div>
-
-            <button id="checkoutBtn"
-            class="mt-3 w-full bg-pink-600 hover:bg-pink-700 text-white py-3 rounded-xl text-xl font-bold shadow-lg transform active:scale-95 transition flex justify-center items-center gap-2">
-            <span>💸</span> COBRAR
-            </button>
+        <div class="bg-pink-50 p-6 rounded-3xl border-2 border-pink-100 shrink-0 shadow-lg text-center">
+            <p class="text-gray-500 font-bold uppercase text-xs">Total a pagar</p>
+            <div class="text-5xl font-black text-pink-600 my-2" id="total">$0.00</div>
+            <button id="checkoutBtn" class="mt-4 w-full bg-pink-600 text-white py-6 rounded-2xl text-2xl font-black shadow-xl active:scale-95 transition-all">💸 COBRAR</button>
         </div>
       </div>
     </section>
 
-    <div id="productsSection" class="hidden p-4 max-w-6xl mx-auto h-full overflow-y-auto">
-        <h2 class="text-3xl font-bold mb-6 text-gray-800">📦 Inventario</h2>
-        
-        <div class="grid md:grid-cols-3 gap-8">
-            <div class="bg-white p-6 rounded-2xl shadow-lg border-t-4 border-pink-500 h-fit">
-                <h2 class="text-xl font-bold mb-4 text-pink-600">📝 Editar / Crear</h2>
-                
-                <label class="text-xs font-bold text-gray-500">Código de Barras</label>
-                <input id="barcodeInput" type="text" placeholder="Escanea..." class="w-full mb-3 p-2 border-2 border-gray-200 rounded-lg focus:border-pink-500 outline-none font-mono"/>
+    <section id="productsSection" class="hidden p-6 max-w-7xl mx-auto h-full overflow-y-auto bg-gray-50">
+    <h2 class="text-3xl font-black mb-8 flex items-center gap-2 text-gray-800">
+        📦 Inventario
+    </h2>
 
-                <label class="text-xs font-bold text-gray-500">Nombre</label>
-                <input id="nameInput" placeholder="Nombre producto" class="w-full mb-3 p-2 border rounded-lg" />
+    <div class="grid md:grid-cols-3 gap-10">
+        <div class="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-pink-500 h-fit sticky top-0">
+            <h3 class="text-xl font-black text-pink-600 mb-6 flex items-center gap-2">
+                📝 Editar / Crear
+            </h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Código de Barras</label>
+                    <input id="barcodeInput" type="text" placeholder="Escanea..." class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all"/>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Nombre</label>
+                    <input id="nameInput" type="text" placeholder="Nombre producto" class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
+                </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="text-xs font-bold text-gray-500">Precio</label>
-                        <input id="priceInput" type="number" placeholder="0.00" class="w-full mb-3 p-2 border rounded-lg" />
+                        <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Precio</label>
+                        <input id="priceInput" type="number" step="0.01" placeholder="0.00" class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
                     </div>
                     <div>
-                        <label class="text-xs font-bold text-gray-500">Stock</label>
-                        <input id="stockInput" type="number" placeholder="0" class="w-full mb-3 p-2 border rounded-lg" />
+                        <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Stock</label>
+                        <input id="stockInput" type="number" placeholder="0" class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
                     </div>
                 </div>
 
-                <label class="text-xs font-bold text-gray-500">Tags</label>
-                <input id="tagsInput" placeholder="Ej: m, p, abarrotes" class="w-full mb-6 p-2 border rounded-lg" />
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Tags</label>
+                    <input id="tagsInput" type="text" placeholder="Ej: m, p, abarrotes" class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
+                </div>
 
-                <button id="addProduct" class="bg-pink-600 text-white w-full py-3 rounded-xl font-bold shadow hover:bg-pink-700">
-                Guardar Producto
+                <button id="addProduct" class="w-full mt-4 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
+                    Guardar Producto
                 </button>
             </div>
+        </div>
 
-            <div class="md:col-span-2 flex flex-col h-[70vh]">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-gray-700">Lista de Productos</h2>
-                </div>
-
-                <div class="mb-4 relative">
-                    <span class="absolute left-3 top-2.5 text-gray-400">🔍</span>
-                    <input 
-                        id="inventorySearch" 
-                        type="text" 
-                        placeholder="Buscar por nombre o código..." 
-                        class="w-full pl-10 p-2 border rounded-lg focus:ring-2 focus:ring-pink-400 outline-none shadow-sm"
-                    />
-                </div>
-
-                <div id="productList" class="space-y-2 flex-1 overflow-y-auto pr-2 pb-10 bg-gray-50 p-2 rounded-lg border">
-                    </div>
+        <div class="md:col-span-2">
+            <h3 class="text-xl font-black text-gray-700 mb-4">Lista de Productos</h3>
+            
+            <div class="relative mb-6">
+                <span class="absolute inset-y-0 left-4 flex items-center text-pink-500">
+                    🔍
+                </span>
+                <input id="inventorySearch" type="text" placeholder="Buscar por nombre o código..." class="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-100 rounded-2xl shadow-sm focus:border-pink-400 outline-none transition-all"/>
             </div>
+
+            <div id="productList" class="space-y-3">
+                </div>
         </div>
     </div>
-
-    <section id="reportsSection" class="hidden max-w-4xl mx-auto mt-4 h-full overflow-y-auto pb-20">
-        <h2 class="text-3xl font-bold mb-6 text-gray-800 text-center">📊 Reportes</h2>
-        <div class="grid md:grid-cols-2 gap-6">
-            <div class="bg-white rounded-xl shadow p-6 border-t-4 border-pink-500">
-                <h3 class="font-bold text-pink-600 mb-2">📅 HOY</h3>
-                <button id="btnReporteDia" class="w-full bg-pink-100 text-pink-700 font-bold py-2 rounded-lg mb-4">Ver Hoy</button>
-                <div id="resultadoDia" class="bg-gray-50 p-3 rounded hidden"></div>
-            </div>
-            <div class="bg-white rounded-xl shadow p-6 border-t-4 border-purple-500">
-                <h3 class="font-bold text-purple-600 mb-2">📆 Rango</h3>
-                <div class="flex gap-2 mb-2">
-                    <input type="date" id="startDate" class="border rounded p-1 w-1/2">
-                    <input type="date" id="endDate" class="border rounded p-1 w-1/2">
-                </div>
-                <button id="btnReporteRango" class="w-full bg-purple-100 text-purple-700 font-bold py-2 rounded-lg">Consultar</button>
-                <div id="resultadoRango" class="bg-gray-50 p-3 rounded mt-4 hidden"></div>
-            </div>
-        </div>
-        <div class="text-center mt-8">
-            <button onclick="exportarExcel()" class="bg-green-600 text-white px-6 py-2 rounded-full font-bold shadow">
-            📥 Bajar Excel
+</section>
+<section id="reportsSection" class="hidden max-w-4xl mx-auto mt-4 h-full overflow-y-auto">
+        <h2 class="text-3xl font-bold mb-6 text-center font-bold">📊 Reportes</h2>
+        
+        <div class="mb-6 px-4">
+            <button onclick="exportarExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black shadow-lg transition-all flex items-center justify-center gap-2">
+                Excel / Descargar Todo el Historial 📥
             </button>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 p-4">
+            <div class="bg-white p-6 rounded-xl shadow border-t-4 border-pink-500">
+                <button id="btnReporteDia" class="w-full bg-pink-100 py-2 rounded-lg font-bold">Ver Hoy</button>
+                <div id="resultadoDia" class="mt-4 hidden"></div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow border-t-4 border-purple-500">
+                <div class="flex gap-2 mb-2">
+                    <input type="date" id="startDate" class="border p-1 w-1/2 rounded">
+                    <input type="date" id="endDate" class="border p-1 w-1/2 rounded">
+                </div>
+                <button id="btnReporteRango" class="w-full bg-purple-100 py-2 rounded-lg font-bold">Consultar</button>
+                <div id="resultadoRango" class="mt-4 hidden"></div>
+            </div>
         </div>
     </section>
 
     <div id="partnersSection" class="hidden w-full p-6 max-w-2xl mx-auto h-full overflow-y-auto">
         <div class="bg-white p-6 rounded-2xl shadow mb-8">
             <h2 class="text-2xl font-bold mb-4">👥 Socios</h2>
-            <div class="flex gap-2 mb-2">
-                <input id="partnerName" type="text" placeholder="Nombre" class="flex-1 p-2 border rounded" />
-                <input id="partnerTag" type="text" placeholder="Tag" class="w-24 p-2 border rounded" />
-            </div>
+            <div class="flex gap-2 mb-2"><input id="partnerName" type="text" placeholder="Nombre" class="flex-1 p-2 border rounded"/><input id="partnerTag" type="text" placeholder="Tag" class="w-24 p-2 border rounded"/></div>
             <button id="addPartner" class="w-full bg-gray-800 text-white py-2 rounded font-bold">Agregar</button>
         </div>
         <div id="partnerList" class="space-y-2"></div>
@@ -212,6 +195,55 @@
 
   </main>
 
+  <input type="hidden" id="cashInput" value="0">
+
   <script src="js/app.js"></script>
+  
+  <script>
+    (function() {
+        const modal = document.getElementById('paymentModal');
+        const btnAbrir = document.getElementById('checkoutBtn');
+        const btnCerrar = document.getElementById('closeModal');
+        const btnConfirmar = document.getElementById('confirmPayment');
+        const inputPago = document.getElementById('modalCashInput');
+        const txtCambio = document.getElementById('modalChange');
+        const txtTotalM = document.getElementById('modalTotal');
+        const txtTotalP = document.getElementById('total');
+        const hiddenCash = document.getElementById('cashInput');
+
+        btnAbrir.addEventListener('click', () => {
+            const t = txtTotalP.innerText;
+            if (parseFloat(t.replace('$', '')) <= 0) return;
+            txtTotalM.innerText = t;
+            inputPago.value = '';
+            txtCambio.innerText = '$0.00';
+            modal.classList.remove('hidden');
+            setTimeout(() => inputPago.focus(), 200);
+        });
+
+        inputPago.addEventListener('input', () => {
+            const tot = parseFloat(txtTotalM.innerText.replace('$', '')) || 0;
+            const pag = parseFloat(inputPago.value) || 0;
+            const cam = pag - tot;
+            txtCambio.innerText = cam > 0 ? `$${cam.toFixed(2)}` : '$0.00';
+            inputPago.style.borderColor = pag >= tot ? '#22c55e' : '#f472b6';
+        });
+
+        btnCerrar.addEventListener('click', () => modal.classList.add('hidden'));
+
+        btnConfirmar.addEventListener('click', () => {
+            const tot = parseFloat(txtTotalM.innerText.replace('$', '')) || 0;
+            const pag = parseFloat(inputPago.value) || 0;
+            if (pag < tot) { alert("Pago insuficiente"); return; }
+            
+            // Pasamos el valor al input que app.js espera
+            hiddenCash.value = pag;
+            modal.classList.add('hidden');
+            
+            // IMPORTANTE: Disparamos manualmente el evento de cobrar si app.js no lo hace solo
+            console.log("Venta procesada");
+        });
+    })();
+  </script>
 </body>
 </html>
