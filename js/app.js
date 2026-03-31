@@ -335,14 +335,25 @@ checkoutBtn?.addEventListener('click', () => {
     modalCashInput.value = '';
     modalChange.textContent = formatMoney(0);
     modal?.classList.remove('hidden');
+    // Enfocamos el input automáticamente para empezar a escribir el pago
     setTimeout(() => modalCashInput.focus(), 200);
 });
 
+// Calcular cambio en tiempo real
 modalCashInput?.addEventListener('input', () => {
     const total = parseFloat(modalTotal.textContent.replace(/[^0-9.-]+/g,"")) || 0;
     const pago = parseFloat(modalCashInput.value) || 0;
     const cambio = pago - total;
     modalChange.textContent = cambio > 0 ? formatMoney(cambio) : formatMoney(0);
+});
+
+// --- NUEVO: FINALIZAR VENTA CON ENTER ---
+modalCashInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        // Disparamos el clic del botón de confirmar
+        confirmPaymentBtn.click();
+    }
 });
 
 closeModalBtn?.addEventListener('click', () => modal.classList.add('hidden'));
@@ -351,7 +362,10 @@ confirmPaymentBtn?.addEventListener('click', async () => {
     const total = parseFloat(modalTotal.textContent.replace(/[^0-9.-]+/g,"")) || 0;
     const pago = parseFloat(modalCashInput.value) || 0;
 
-    if (pago < total) { alert("Pago insuficiente"); return; }
+    if (pago < total) { 
+        alert("⚠️ Pago insuficiente. El total es " + formatMoney(total)); 
+        return; 
+    }
 
     const saleData = {
         products: cart.map(i => ({ product: i._id, quantity: i.qty, price: i.price })),
@@ -371,9 +385,14 @@ confirmPaymentBtn?.addEventListener('click', async () => {
             cart = [];
             renderCart();
             modal.classList.add('hidden');
-            fetchProducts();
+            fetchProducts(); // Recarga stock en la interfaz
+        } else {
+            alert("❌ Hubo un problema al guardar la venta en el servidor.");
         }
-    } catch (e) { alert("Error al guardar venta"); }
+    } catch (e) { 
+        console.error(e);
+        alert("📡 Error de conexión al guardar venta"); 
+    }
 });
 
 // ====================
@@ -405,15 +424,31 @@ if (inventorySearch) {
         renderProductAdmin(filtered);
     });
 }
-// Escáner Código de Barras
+// ==========================================
+// 🛒 ESCÁNER POS (CON COBRO AUTOMÁTICO)
+// ==========================================
 barcodeInputPOS?.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
-        const p = allProducts.find(prod => prod.barcode === barcodeInputPOS.value.trim());
-        if(p) { addToCart(p); barcodeInputPOS.value = ''; }
-        else { alert("No encontrado"); barcodeInputPOS.value = ''; }
+        const val = barcodeInputPOS.value.trim();
+        
+        if (val === '') {
+            // 1. Si presionas ENTER y el cuadro está VACÍO -> Abrimos cobro
+            if (cart.length > 0) {
+                checkoutBtn.click(); 
+            }
+        } else {
+            // 2. Si el cuadro TIENE UN CÓDIGO -> Buscamos el producto
+            const p = allProducts.find(prod => prod.barcode === val);
+            if (p) { 
+                addToCart(p); 
+                barcodeInputPOS.value = ''; 
+            } else { 
+                alert("❌ Producto no encontrado"); 
+                barcodeInputPOS.value = ''; 
+            }
+        }
     }
 });
-
 /// Renderizar Socios (Diseño Mejorado)
 function renderPartners(partners) {
     if(!partnerList) return;
@@ -649,3 +684,57 @@ window.exportarExcel = async function() {
         alert('Hubo un error al generar el archivo. Revisa la consola.');
     }
 };
+
+// ==========================================
+// ⚡ ENFOQUE AUTOMÁTICO DEL ESCÁNER (GLOBAL)
+// ==========================================
+document.addEventListener('keydown', (e) => {
+    // 1. Si ya estás escribiendo en un input (ej: nombre, precio o búsqueda), no hacemos nada
+    const activeElem = document.activeElement;
+    const isInput = activeElem.tagName === 'INPUT' || activeElem.tagName === 'TEXTAREA';
+    
+    // 2. Si NO estás escribiendo y presionas una tecla (que no sea Ctrl/Alt/Cmd)
+    if (!isInput && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        
+        // 3. Revisamos en qué sección estamos para saber a qué input mandar el foco
+        const isInventoryVisible = !productsSection.classList.contains('hidden');
+        const targetInput = isInventoryVisible ? barcodeInput : barcodeInputPOS;
+
+        if (targetInput) {
+            targetInput.focus();
+            // El navegador pondrá automáticamente el carácter presionado en el input
+        }
+    }
+});
+
+// ==========================================
+// 🔍 LÓGICA INTELIGENTE DEL ESCÁNER (ACTUALIZADA)
+// ==========================================
+// Este evento reemplaza o mejora el comportamiento del barcodeInput en Inventario
+barcodeInput?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const code = barcodeInput.value.trim();
+        if (!code) return;
+
+        const product = allProducts.find(p => p.barcode === code);
+
+        if (product) {
+            // Si el producto existe, lo cargamos para EDITAR
+            productoEnEdicionId = product._id;
+            nameInput.value = product.name;
+            priceInput.value = product.price;
+            stockInput.value = product.stock;
+            tagsInput.value = product.tags ? product.tags.join(', ') : '';
+            
+            barcodeInput.disabled = true;
+            barcodeInput.classList.add('bg-gray-100');
+            btnGuardarProducto.innerHTML = "<span>🔄</span> Actualizar";
+            nameInput.focus();
+        } else {
+            // Si es nuevo, saltamos al nombre para CREAR
+            productoEnEdicionId = null;
+            nameInput.focus();
+        }
+    }
+});
