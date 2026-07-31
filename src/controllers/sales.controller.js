@@ -54,7 +54,6 @@ exports.getSales = async (req, res) => {
 // =======================
 exports.cancelSale = async (req, res) => {
   try {
-
     const sale = await Sale.findById(req.params.id);
 
     if (!sale) {
@@ -103,7 +102,6 @@ exports.cancelSale = async (req, res) => {
 // =======================
 exports.getDailyReport = async (req, res) => {
   try {
-
     const start = new Date();
     start.setHours(0,0,0,0);
 
@@ -138,9 +136,7 @@ exports.getDailyReport = async (req, res) => {
 // 🤝 REPORTE POR SOCIO
 // =======================
 exports.getSalesByPartner = async (req,res)=>{
-
   try{
-
     const { partner } = req.params;
 
     const sales = await Sale.find({
@@ -160,11 +156,55 @@ exports.getSalesByPartner = async (req,res)=>{
     });
 
   }catch(error){
-
     res.status(500).json({
       message:'Error en reporte por socio'
     });
-
   }
+};
+// =======================
+// ✏️ ACTUALIZAR/QUITAR PRODUCTO DE VENTA (CON RECALCULO DE CAMBIO)
+// =======================
+exports.updateSale = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { products, total, pagoCliente, paidWith, cambio } = req.body;
 
+    const ventaAnterior = await Sale.findById(id);
+    if (!ventaAnterior) {
+      return res.status(404).json({ message: 'Venta no encontrada' });
+    }
+
+    // Devolver stock del producto eliminado
+    for (const itemViejo of ventaAnterior.products) {
+      const prodIdViejo = (itemViejo.product?._id || itemViejo.product).toString();
+      
+      const sigueExistiendo = products.some(p => {
+        const prodIdNuevo = (p.product?._id || p.product).toString();
+        return prodIdNuevo === prodIdViejo;
+      });
+
+      if (!sigueExistiendo) {
+        await Product.findByIdAndUpdate(prodIdViejo, {
+          $inc: { stock: itemViejo.quantity }
+        });
+      }
+    }
+
+    // Armamos los campos a actualizar
+    const datosActualizados = { products, total };
+    if (pagoCliente !== undefined) datosActualizados.pagoCliente = pagoCliente;
+    if (paidWith !== undefined) datosActualizados.paidWith = paidWith;
+    if (cambio !== undefined) datosActualizados.cambio = cambio;
+
+    const ventaActualizada = await Sale.findByIdAndUpdate(
+      id,
+      datosActualizados,
+      { new: true }
+    ).populate('products.product');
+
+    res.json(ventaActualizada);
+  } catch (error) {
+    console.error('Error al actualizar venta:', error);
+    res.status(500).json({ message: error.message || 'Error al actualizar la venta' });
+  }
 };

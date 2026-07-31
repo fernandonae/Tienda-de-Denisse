@@ -1,7 +1,7 @@
 // ====================
 // 🌍 CONEXIÓN AL SERVIDOR
 // ====================
-const API_URL = 'https://tienda-de-denisse.onrender.com/api';
+const API_URL = 'https://tienda-de-denisse.onrender.com/api';;
 
 // ====================
 // VARIABLES GLOBALES
@@ -934,8 +934,8 @@ function renderVentas(ventas) {
     });
 }
 
-// 2. FUNCIÓN PARA ELIMINAR UN SOLO PRODUCTO Y RECALCULAR
-window.cancelarProductoDeVenta = function(ventaId, itemIndex) {
+// 2. FUNCIÓN PARA ELIMINAR UN SOLO PRODUCTO Y RECALCULAR PAGO/CAMBIO
+window.cancelarProductoDeVenta = async function(ventaId, itemIndex) {
     const venta = todasLasVentas.find(v => v._id === ventaId);
     if (!venta || !venta.products || !venta.products[itemIndex]) return;
 
@@ -945,54 +945,78 @@ window.cancelarProductoDeVenta = function(ventaId, itemIndex) {
     const cantidad = parseFloat(item.quantity || 1);
     const montoACancelar = precio * cantidad;
 
-    if (!confirm(`¿Quitar "${nombreProducto}" de esta venta?`)) return;
-
-    // Quitar producto de la lista
-    venta.products.splice(itemIndex, 1);
-
-    // Recalcular Total
     const totalAnterior = parseFloat(venta.total || 0);
-    venta.total = Math.max(0, totalAnterior - montoACancelar);
+    const nuevoTotal = Math.max(0, totalAnterior - montoACancelar);
 
-    // Calcular cambio a devolver
+    // 🟢 Obtenemos con cuánto pagó el cliente originalmente
     let pagoCliente = parseFloat(venta.pagoCliente || venta.paidWith || 0);
-    if (!pagoCliente && venta.cambio !== undefined) {
+    
+    // Si no estaba guardado 'pagoCliente', lo deducimos si existía el campo 'cambio'
+    if (!pagoCliente && venta.cambio !== undefined && venta.cambio !== null) {
         pagoCliente = totalAnterior + parseFloat(venta.cambio || 0);
     }
 
-    const nuevoCambio = pagoCliente > 0 ? (pagoCliente - venta.total) : 0;
-    venta.cambio = nuevoCambio;
+    // 🟢 Recalculamos los cambios
+    const cambioAnterior = pagoCliente > 0 ? Math.max(0, pagoCliente - totalAnterior) : 0;
+    const nuevoCambio = pagoCliente > 0 ? Math.max(0, pagoCliente - nuevoTotal) : 0;
 
-    alert(
-        `❌ Producto cancelado: ${nombreProducto}\n` +
-        `----------------------------------------\n` +
-        `📉 Nuevo Total: ${formatMoney(venta.total)}\n` +
-        `💵 Pagó con: ${formatMoney(pagoCliente)}\n` +
-        `🔄 DINERO A REGRESAR AL CLIENTE: ${formatMoney(montoACancelar)}`
-    );
+    // 📋 Texto de desglose para la ventana de confirmación
+    let desgloseTexto = `📦 Producto a quitar: ${nombreProducto} ($${montoACancelar.toFixed(2)})\n`;
+    desgloseTexto += `----------------------------------------\n`;
+    desgloseTexto += `📉 Total Anterior: ${formatMoney(totalAnterior)} ➡️ Nuevo Total: ${formatMoney(nuevoTotal)}\n`;
 
-    // Volver a renderizar las ventas para actualizar los montos
-    renderVentas(todasLasVentas);
-};
+    if (pagoCliente > 0) {
+        desgloseTexto += `💵 Pagó con: ${formatMoney(pagoCliente)}\n`;
+        desgloseTexto += `🔄 Cambio que se le dio antes: ${formatMoney(cambioAnterior)}\n`;
+        desgloseTexto += `💰 Nuevo Cambio que le corresponde: ${formatMoney(nuevoCambio)}\n`;
+    }
+    desgloseTexto += `----------------------------------------\n`;
+    desgloseTexto += `🔴 EFECTIVO A REGRESAR AL CLIENTE AHORA: ${formatMoney(montoACancelar)}`;
 
-async function cancelarVenta(id) {
-    if (!confirm('¿Cancelar esta venta? El stock de los productos se devolverá al inventario.')) return;
+    if (!confirm(desgloseTexto)) return;
+
+    // Preparamos lista de productos para la BD
+    const productosFiltrados = venta.products.filter((_, idx) => idx !== itemIndex);
+    const productosParaEnviar = productosFiltrados.map(p => ({
+        product: p.product?._id || p.product || p.id,
+        quantity: parseFloat(p.quantity || 1),
+        price: parseFloat(p.price || p.product?.price || 0)
+    }));
+
     try {
-        const res = await fetch(`${API_URL}/sales/${id}/cancel`, { method: 'PATCH' });
+        const res = await fetch(`${API_URL}/sales/${ventaId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                products: productosParaEnviar, 
+                total: nuevoTotal,
+                pagoCliente: pagoCliente,
+                paidWith: pagoCliente,
+                cambio: nuevoCambio
+            })
+        });
+
         if (res.ok) {
-            alert('✅ Venta cancelada, stock devuelto.');
-            fetchSales();
+            alert(
+                `✅ Venta recalculada y guardada:\n\n` +
+                `💵 Devuelve al cliente: ${formatMoney(montoACancelar)}\n` +
+                `📉 Nuevo Total Venta: ${formatMoney(nuevoTotal)}` +
+                (pagoCliente > 0 ? `\n🔄 Nuevo Cambio Registrado: ${formatMoney(nuevoCambio)}` : '')
+            );
+
+            await fetchSales(); 
             if (typeof fetchProducts === 'function') fetchProducts(); 
+            if (typeof fetchReportes === 'function') fetchReportes();
+            if (typeof renderReportes === 'function') renderReportes();
         } else {
-            const err = await res.json();
-            alert('❌ Error: ' + (err.message || 'No se pudo cancelar'));
+            const err = await res.json().catch(() => ({}));
+            alert('❌ No se pudo actualizar la venta: ' + (err.message || 'Error en el servidor'));
         }
     } catch (error) {
-        console.error('cancelarVenta error:', error);
-        alert('📡 Error de conexión al cancelar la venta.');
+        console.error('Error de conexión:', error);
+        alert('📡 Error de conexión con el servidor.');
     }
-}
-
+};
 // ==========================================
 // 🏷️ FUNCIONES DE IMPRESIÓN DE PRECIOS
 // ==========================================
@@ -1050,7 +1074,7 @@ window.imprimirEtiquetas = function(productos) {
         <style>
             @page {
                 size: A4;
-                margin: 10mm;
+                margin: 8mm;
             }
             body {
                 font-family: Arial, sans-serif;
@@ -1058,69 +1082,76 @@ window.imprimirEtiquetas = function(productos) {
                 padding: 0;
                 background: #fff;
             }
-            /* 🔹 CAMBIO 1: Cambiamos de 4 a 2 columnas para darles el doble de ancho */
+            /* 🔹 CAMBIO 1: 3 columnas para que la etiqueta no quede tan ancha y tenga forma de tarjeta */
             .grid-etiquetas {
                 display: grid;
-                grid-template-columns: repeat(2, 1fr); 
-                gap: 8mm;
+                grid-template-columns: repeat(3, 1fr); 
+                gap: 6mm;
             }
-            /* 🔹 CAMBIO 2: Aumentamos la altura de cada tarjeta */
+            /* 🔹 CAMBIO 2: Distribución vertical para aprovechar la altura */
             .etiqueta {
-                border: 2px dashed #333;
+                border: 2px dashed #222;
                 border-radius: 10px;
-                padding: 12px;
+                padding: 10px 8px;
                 text-align: center;
                 box-sizing: border-box;
                 page-break-inside: avoid;
                 display: flex;
                 flex-direction: column;
-                justify-content: center;
+                justify-content: space-between;
                 align-items: center;
-                min-height: 55mm; /* Antes medía 35mm */
+                min-height: 60mm; /* Mayor altura para que quepa la letra grande */
             }
-            /* 🔹 CAMBIO 3: Controlamos el tamaño de la Imagen o Código de Barras */
-            .etiqueta img, 
-            .etiqueta svg {
-                max-width: 90%;
-                height: auto;
-                max-height: 70px; /* Controla qué tan alta se ve la imagen */
-                margin: 6px 0;
-                object-fit: contain;
-            }
-            /* 🔹 CAMBIO 4: Aumentamos el tamaño de las letras y precios */
+            /* 🔹 CAMBIO 3: Nombre de producto más grande y resaltado */
             .nombre {
-                font-size: 18px; /* Antes era 13px */
-                font-weight: bold;
-                color: #111;
-                line-height: 1.2;
-                max-height: 2.4em;
+                font-size: 19px; 
+                font-weight: 800;
+                color: #000;
+                line-height: 1.15;
+                max-height: 2.3em;
                 overflow: hidden;
-                margin-bottom: 6px;
+                margin-bottom: 4px;
                 text-transform: uppercase;
+                width: 100%;
+                word-break: break-word;
             }
+            /* 🔹 CAMBIO 4: Precio gigante para vista rápida */
             .precio {
-                font-size: 34px; /* Antes era 22px */
+                font-size: 44px; 
                 font-weight: 900;
                 color: #000;
-                margin: 4px 0;
+                margin: 2px 0;
+                line-height: 1;
+                letter-spacing: -1px;
             }
+            /* 🔹 CAMBIO 5: Ajuste de código de barras / imagen */
+            .etiqueta img, 
+            .etiqueta svg {
+                max-width: 95%;
+                height: auto;
+                max-height: 65px;
+                margin: 4px 0;
+                object-fit: contain;
+            }
+            /* 🔹 CAMBIO 6: Texto de código e indicador de granel más legibles */
             .codigo {
                 font-family: monospace;
-                font-size: 13px; /* Antes era 10px */
-                color: #444;
-                border-top: 1px solid #ccc;
+                font-size: 14px; 
+                font-weight: bold;
+                color: #222;
+                border-top: 2px solid #bbb;
                 width: 100%;
                 padding-top: 4px;
-                margin-top: 4px;
+                margin-top: 2px;
             }
             .granel {
-                font-size: 12px; /* Antes era 9px */
-                font-weight: bold;
-                color: #059669;
-                background: #ecfdf5;
-                padding: 3px 10px;
+                font-size: 13px; 
+                font-weight: 800;
+                color: #047857;
+                background: #d1fae5;
+                padding: 3px 8px;
                 border-radius: 6px;
-                margin-top: 4px;
+                margin-top: 2px;
             }
         </style>
     </head>
@@ -1137,7 +1168,6 @@ window.imprimirEtiquetas = function(productos) {
     </body>
     </html>
 `);
-
     win.document.close();
 };
 
