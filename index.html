@@ -183,14 +183,21 @@
                     <input id="inventorySearch" type="text" placeholder="Buscar por nombre o código..." class="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-100 rounded-2xl shadow-sm focus:border-pink-400 outline-none transition-all"/>
                 </div>
                 
-                <div class="flex gap-2">
-                    <button onclick="imprimirEtiquetas(allProducts)" class="bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
-                        🖨️ Imprimir Todas las Etiquetas
-                    </button>
-                    <button onclick="imprimirSoloGranel()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
-                        ⚖️ Imprimir Etiquetas a Granel
-                    </button>
-                </div>
+                <div class="flex gap-2 flex-wrap">
+    <button onclick="imprimirEtiquetas(allProducts)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
+        🖨️ Imprimir Todas las Etiquetas
+    </button>
+
+    <button onclick="imprimirSoloGranel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
+        ⚖️ Imprimir Etiquetas a Granel
+    </button>
+
+    <!-- 🔻 BOTÓN DE MODIFICADAS CORREGIDO 🔻 -->
+    <button onclick="imprimirEtiquetasModificadas()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
+        🏷️ Imprimir Etiquetas Modificadas
+        <span id="numEtiquetasPendientes" class="bg-white text-amber-800 text-xs px-2 py-0.5 rounded-full font-black">0</span>
+    </button>
+</div>
             </div>
 
             <!-- 🔄 Contenedor que se desplaza con la lista de productos -->

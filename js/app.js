@@ -324,25 +324,22 @@ if (btnGuardar) {
     btnGuardar.onclick = async () => {
         const name    = document.getElementById('nameInput').value.trim();
         const price   = parseFloat(document.getElementById('priceInput').value);
-        const stock   = parseFloat(document.getElementById('stockInput').value) || 0; // Cambiado a parseFloat por si usas decimales en kilos
+        const stock   = parseFloat(document.getElementById('stockInput').value) || 0;
         let barcode   = document.getElementById('barcodeInput').value.trim();
         const tags    = document.getElementById('tagsInput').value
             .split(',').map(t => t.trim().toLowerCase()).filter(t => t !== '');
 
-        // 🟢 NUVOS CAMPOS: Captura de Granel y Unidad de medida
         const isBulkInput = document.getElementById('isBulkInput');
         const unitInput   = document.getElementById('unitInput');
         
         const isBulk = isBulkInput ? isBulkInput.checked : false;
         const unit   = unitInput ? (unitInput.value.trim() || 'kg') : 'kg';
 
-        // 🟢 LÓGICA DE CÓDIGO DE BARRAS / GRANEL
         if (!isBulk && !barcode) {
             alert('⚠️ Ingresa un código de barras para productos normales.');
             return;
         }
 
-        // Si es a granel y no escribieron código, genera uno automático interno
         if (isBulk && !barcode) {
             barcode = 'GRANEL-' + Date.now();
         }
@@ -357,11 +354,24 @@ if (btnGuardar) {
             const res = await fetch(url, {
                 method: metodo,
                 headers: { 'Content-Type': 'application/json' },
-                // 🟢 Se agregan 'isBulk' y 'unit' al cuerpo de la petición
                 body: JSON.stringify({ barcode, name, price, stock, tags, isBulk, unit })
             });
 
             if (res.ok) {
+                // 🟢 1. OBTIENE EL PRODUCTO GUARDADO/EDITADO
+                let productoGuardado = null;
+                try {
+                    productoGuardado = await res.json();
+                } catch (e) {
+                    // Si el servidor no devolvió un JSON, creamos el objeto con los datos introducidos
+                    productoGuardado = { _id: productoEnEdicionId || barcode, name, price, stock, barcode, isBulk, unit };
+                }
+
+                // 🟢 2. REGISTRA EL PRODUCTO PARA IMPRIMIR SU ETIQUETA
+                if (typeof registrarProductoModificado === 'function') {
+                    registrarProductoModificado(productoGuardado);
+                }
+
                 alert(esEdicion ? '✨ ¡Producto actualizado!' : '✅ ¡Producto guardado!');
                 productoEnEdicionId = null;
 
@@ -372,7 +382,6 @@ if (btnGuardar) {
                         if (el) el.value = ''; 
                     });
 
-                // 🟢 Desmarcar casilla de granel
                 if (isBulkInput) isBulkInput.checked = false;
 
                 document.getElementById('barcodeInput').disabled = false;
@@ -381,7 +390,6 @@ if (btnGuardar) {
                 btnGuardar.classList.remove('bg-yellow-500');
                 btnGuardar.classList.add('bg-pink-600');
 
-                // ✅ Actualizar local sin re-fetch completo para mejorar velocidad
                 fetchProducts();
             } else {
                 const err = await res.json();
@@ -393,8 +401,6 @@ if (btnGuardar) {
         }
     };
 }
-
-
 // ====================
 // 🛒 CARRITO
 // ====================
@@ -840,6 +846,8 @@ window.exportarExcel = async function () {
 // ====================
 // 🧾 HISTORIAL DE VENTAS
 // ====================
+let todasLasVentas = []; // Guardará las ventas para poder consultar sus productos
+
 async function fetchSales() {
     if (!ventasList) return;
     ventasList.innerHTML = '<p class="text-center text-gray-400 py-6 animate-pulse">Cargando ventas...</p>';
@@ -847,6 +855,7 @@ async function fetchSales() {
         const res = await fetch(`${API_URL}/sales`);
         if (!res.ok) throw new Error('Error al obtener ventas');
         const ventas = await res.json();
+        todasLasVentas = ventas; // Guardamos copia local
         renderVentas(ventas);
     } catch (error) {
         console.error('fetchSales error:', error);
@@ -865,27 +874,56 @@ function renderVentas(ventas) {
 
     ventas.forEach(v => {
         const cancelada = v.status === 'cancelled';
-
-        const detalle = (v.products || []).map(item => {
-            const nombre = item.product?.name || 'Producto eliminado';
-            return `${nombre} x${item.quantity}`;
-        }).join(', ');
-
         const fecha = v.createdAt ? new Date(v.createdAt).toLocaleString('es-MX') : 'Sin fecha';
 
+        // 1. DIBUJAMOS CADA PRODUCTO CON SU PROPIO BOTÓN DE ELIMINAR
+        let productosHtml = '';
+        if (v.products && v.products.length > 0) {
+            productosHtml = v.products.map((item, index) => {
+                const nombre = item.product?.name || item.name || 'Producto eliminado';
+                const precio = parseFloat(item.price || item.product?.price || 0);
+                const cantidad = parseFloat(item.quantity || 1);
+                const subtotal = precio * cantidad;
+
+                return `
+                    <div class="flex justify-between items-center py-1.5 border-b border-gray-100 last:border-0">
+                        <span class="text-sm text-gray-700">
+                            <strong class="text-gray-800">${nombre}</strong> x${cantidad} 
+                            <span class="text-gray-400 text-xs">($${subtotal.toFixed(2)})</span>
+                        </span>
+                        ${!cancelada ? `
+                            <button onclick="cancelarProductoDeVenta('${v._id}', ${index})" 
+                                    class="bg-red-100 hover:bg-red-200 text-red-600 px-2 py-0.5 rounded-lg text-xs font-bold transition-all ml-2 shrink-0">
+                                🗑️ Quitar
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        } else {
+            productosHtml = '<p class="text-xs text-gray-400 italic">Sin productos</p>';
+        }
+
         const div = document.createElement('div');
-        div.className = `bg-white p-4 rounded-2xl shadow-sm border-2 ${cancelada ? 'border-red-200 bg-red-50' : 'border-gray-100'} flex justify-between items-center gap-3`;
+        div.className = `bg-white p-4 rounded-2xl shadow-sm border-2 ${cancelada ? 'border-red-200 bg-red-50' : 'border-gray-100'} flex flex-col gap-3`;
 
         div.innerHTML = `
-            <div class="flex-1 ${cancelada ? 'opacity-60 line-through' : ''}">
-                <div class="flex items-center gap-2">
-                    <span class="font-black text-gray-800 text-lg">${formatMoney(v.total)}</span>
-                    ${cancelada ? '<span class="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg not-italic no-underline">CANCELADA</span>' : ''}
+            <div class="flex justify-between items-start ${cancelada ? 'opacity-60 line-through' : ''}">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-black text-gray-800 text-xl">${formatMoney(v.total)}</span>
+                        ${cancelada ? '<span class="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg not-italic no-underline">CANCELADA</span>' : ''}
+                    </div>
+                    <p class="text-xs text-gray-400 mt-0.5">${fecha} · ${v.paymentMethod || 'efectivo'}</p>
                 </div>
-                <p class="text-xs text-gray-400">${fecha} · ${v.paymentMethod || 'efectivo'}</p>
-                <p class="text-sm text-gray-600 mt-1">${detalle || 'Sin productos'}</p>
+                ${!cancelada ? `<button class="cancel-venta-btn bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-xl font-bold text-xs shadow-sm active:scale-95 transition-all shrink-0">Cancelar Venta</button>` : ''}
             </div>
-            ${!cancelada ? `<button class="cancel-venta-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all shrink-0">Cancelar</button>` : ''}
+
+            <!-- Lista desplegada de productos de la venta -->
+            <div class="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <p class="text-xs font-bold text-gray-400 uppercase mb-1">Productos comprados:</p>
+                ${productosHtml}
+            </div>
         `;
 
         if (!cancelada) {
@@ -896,6 +934,47 @@ function renderVentas(ventas) {
     });
 }
 
+// 2. FUNCIÓN PARA ELIMINAR UN SOLO PRODUCTO Y RECALCULAR
+window.cancelarProductoDeVenta = function(ventaId, itemIndex) {
+    const venta = todasLasVentas.find(v => v._id === ventaId);
+    if (!venta || !venta.products || !venta.products[itemIndex]) return;
+
+    const item = venta.products[itemIndex];
+    const nombreProducto = item.product?.name || item.name || 'este producto';
+    const precio = parseFloat(item.price || item.product?.price || 0);
+    const cantidad = parseFloat(item.quantity || 1);
+    const montoACancelar = precio * cantidad;
+
+    if (!confirm(`¿Quitar "${nombreProducto}" de esta venta?`)) return;
+
+    // Quitar producto de la lista
+    venta.products.splice(itemIndex, 1);
+
+    // Recalcular Total
+    const totalAnterior = parseFloat(venta.total || 0);
+    venta.total = Math.max(0, totalAnterior - montoACancelar);
+
+    // Calcular cambio a devolver
+    let pagoCliente = parseFloat(venta.pagoCliente || venta.paidWith || 0);
+    if (!pagoCliente && venta.cambio !== undefined) {
+        pagoCliente = totalAnterior + parseFloat(venta.cambio || 0);
+    }
+
+    const nuevoCambio = pagoCliente > 0 ? (pagoCliente - venta.total) : 0;
+    venta.cambio = nuevoCambio;
+
+    alert(
+        `❌ Producto cancelado: ${nombreProducto}\n` +
+        `----------------------------------------\n` +
+        `📉 Nuevo Total: ${formatMoney(venta.total)}\n` +
+        `💵 Pagó con: ${formatMoney(pagoCliente)}\n` +
+        `🔄 DINERO A REGRESAR AL CLIENTE: ${formatMoney(montoACancelar)}`
+    );
+
+    // Volver a renderizar las ventas para actualizar los montos
+    renderVentas(todasLasVentas);
+};
+
 async function cancelarVenta(id) {
     if (!confirm('¿Cancelar esta venta? El stock de los productos se devolverá al inventario.')) return;
     try {
@@ -903,7 +982,7 @@ async function cancelarVenta(id) {
         if (res.ok) {
             alert('✅ Venta cancelada, stock devuelto.');
             fetchSales();
-            fetchProducts(); // refrescar inventario con el stock ya repuesto
+            if (typeof fetchProducts === 'function') fetchProducts(); 
         } else {
             const err = await res.json();
             alert('❌ Error: ' + (err.message || 'No se pudo cancelar'));
@@ -962,90 +1041,156 @@ window.imprimirEtiquetas = function(productos) {
         `;
     });
 
-    win.document.write(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <title>Imprimir Precios</title>
-            <style>
-                @page {
-                    size: A4;
-                    margin: 10mm;
-                }
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 0;
-                    padding: 0;
-                    background: #fff;
-                }
-                .grid-etiquetas {
-                    display: grid;
-                    grid-template-columns: repeat(4, 1fr);
-                    gap: 8mm;
-                }
-                .etiqueta {
-                    border: 2px dashed #333;
-                    border-radius: 8px;
-                    padding: 8px;
-                    text-align: center;
-                    box-sizing: border-box;
-                    page-break-inside: avoid;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 35mm;
-                }
-                .nombre {
-                    font-size: 13px;
-                    font-weight: bold;
-                    color: #111;
-                    line-height: 1.1;
-                    max-height: 2.2em;
-                    overflow: hidden;
-                    margin-bottom: 4px;
-                    text-transform: uppercase;
-                }
-                .precio {
-                    font-size: 22px;
-                    font-weight: 900;
-                    color: #000;
-                    margin: 2px 0;
-                }
-                .codigo {
-                    font-family: monospace;
-                    font-size: 10px;
-                    color: #555;
-                    border-top: 1px solid #ccc;
-                    width: 100%;
-                    padding-top: 2px;
-                    margin-top: 2px;
-                }
-                .granel {
-                    font-size: 9px;
-                    font-weight: bold;
-                    color: #059669;
-                    background: #ecfdf5;
-                    padding: 1px 6px;
-                    border-radius: 4px;
-                    margin-top: 2px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="grid-etiquetas">
-                ${htmlEtiquetas}
-            </div>
-            <script>
-                window.onload = function() {
-                    window.print();
-                    window.close();
-                };
-            <\/script>
-        </body>
-        </html>
-    `);
+   win.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Imprimir Precios</title>
+        <style>
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background: #fff;
+            }
+            /* 🔹 CAMBIO 1: Cambiamos de 4 a 2 columnas para darles el doble de ancho */
+            .grid-etiquetas {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr); 
+                gap: 8mm;
+            }
+            /* 🔹 CAMBIO 2: Aumentamos la altura de cada tarjeta */
+            .etiqueta {
+                border: 2px dashed #333;
+                border-radius: 10px;
+                padding: 12px;
+                text-align: center;
+                box-sizing: border-box;
+                page-break-inside: avoid;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                min-height: 55mm; /* Antes medía 35mm */
+            }
+            /* 🔹 CAMBIO 3: Controlamos el tamaño de la Imagen o Código de Barras */
+            .etiqueta img, 
+            .etiqueta svg {
+                max-width: 90%;
+                height: auto;
+                max-height: 70px; /* Controla qué tan alta se ve la imagen */
+                margin: 6px 0;
+                object-fit: contain;
+            }
+            /* 🔹 CAMBIO 4: Aumentamos el tamaño de las letras y precios */
+            .nombre {
+                font-size: 18px; /* Antes era 13px */
+                font-weight: bold;
+                color: #111;
+                line-height: 1.2;
+                max-height: 2.4em;
+                overflow: hidden;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+            }
+            .precio {
+                font-size: 34px; /* Antes era 22px */
+                font-weight: 900;
+                color: #000;
+                margin: 4px 0;
+            }
+            .codigo {
+                font-family: monospace;
+                font-size: 13px; /* Antes era 10px */
+                color: #444;
+                border-top: 1px solid #ccc;
+                width: 100%;
+                padding-top: 4px;
+                margin-top: 4px;
+            }
+            .granel {
+                font-size: 12px; /* Antes era 9px */
+                font-weight: bold;
+                color: #059669;
+                background: #ecfdf5;
+                padding: 3px 10px;
+                border-radius: 6px;
+                margin-top: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="grid-etiquetas">
+            ${htmlEtiquetas}
+        </div>
+        <script>
+            window.onload = function() {
+                window.print();
+                window.close();
+            };
+        <\/script>
+    </body>
+    </html>
+`);
 
     win.document.close();
 };
+
+// ==========================================
+// 🏷️ GESTIÓN DE ETIQUETAS MODIFICADAS
+// ==========================================
+
+// Guardar un producto en la lista de modificados
+function registrarProductoModificado(producto) {
+    if (!producto) return;
+    let pendientes = JSON.parse(localStorage.getItem('etiquetasPendientes')) || [];
+    
+    // Evitamos duplicados: si ya estaba en la lista, lo actualiza
+    const idProd = producto._id || producto.id;
+    pendientes = pendientes.filter(p => (p._id || p.id) !== idProd);
+    pendientes.push(producto);
+    
+    localStorage.setItem('etiquetasPendientes', JSON.stringify(pendientes));
+    actualizarContadorEtiquetasPendientes();
+}
+
+// Actualizar el numerito del botón
+function actualizarContadorEtiquetasPendientes() {
+    const pendientes = JSON.parse(localStorage.getItem('etiquetasPendientes')) || [];
+    const badge = document.getElementById('numEtiquetasPendientes');
+    if (badge) {
+        badge.textContent = pendientes.length;
+    }
+}
+
+// Función que manda a imprimir SOLO las modificadas
+window.imprimirEtiquetasModificadas = function() {
+    const pendientes = JSON.parse(localStorage.getItem('etiquetasPendientes')) || [];
+    
+    if (pendientes.length === 0) {
+        alert("ℹ️ No hay productos modificados recientemente para imprimir.");
+        return;
+    }
+
+    if (typeof imprimirEtiquetas === 'function') {
+        imprimirEtiquetas(pendientes);
+    } else {
+        alert("⚠️ No se encontró la función de impresión.");
+        return;
+    }
+
+    setTimeout(() => {
+        if (confirm("¿Deseas limpiar la lista de etiquetas modificadas ya impresas?")) {
+            localStorage.removeItem('etiquetasPendientes');
+            actualizarContadorEtiquetasPendientes();
+        }
+    }, 1000);
+};
+
+// Cargar el contador al abrir la página
+document.addEventListener('DOMContentLoaded', actualizarContadorEtiquetasPendientes);
