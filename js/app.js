@@ -121,6 +121,9 @@ const resultadoRango     = document.getElementById('resultadoRango');
 const startDateInput     = document.getElementById('startDate');
 const endDateInput       = document.getElementById('endDate');
 const inventorySearch    = document.getElementById('inventorySearch');
+const btnVentas   = document.getElementById('btnVentas');
+const ventasSection = document.getElementById('ventasSection');
+const ventasList  = document.getElementById('ventasList');
 
 // ====================
 // UTILIDADES
@@ -128,7 +131,7 @@ const inventorySearch    = document.getElementById('inventorySearch');
 const formatMoney = n => Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 const hideAllSections = () => {
-    [posSection, productsSection, reportsSection, partnersSection]
+    [posSection, productsSection, reportsSection, partnersSection, ventasSection]
         .forEach(s => s?.classList.add('hidden'));
 };
 
@@ -195,29 +198,64 @@ function renderProducts(products) {
 
     products.forEach(p => {
         const card = document.createElement('div');
-        let bordeColor = 'border-pink-100';
+        let bordeColor = 'border-pink-100 bg-white';
         let opacidad   = 'opacity-100';
         let clickeable = true;
 
+        // Indicadores visuales de Stock
         if (p.stock > 0 && p.stock <= 5) {
-            bordeColor = 'border-orange-400 bg-orange-50';
+            bordeColor = 'border-orange-300 bg-orange-50';
         } else if (p.stock <= 0) {
             bordeColor = 'border-gray-200 bg-gray-100';
             opacidad   = 'opacity-60';
             clickeable = false;
         }
 
-        card.className = `product-card p-4 rounded shadow hover:shadow-lg transition cursor-pointer border-2 ${bordeColor} ${opacidad} relative`;
+        // Mostrar Badge del Tag / Socio si cuenta con uno
+        const tagBadge = (p.tags && p.tags.length > 0)
+            ? `<span class="bg-pink-100 text-pink-700 text-[10px] font-black px-1.5 py-0.5 rounded-md uppercase">#${p.tags[0]}</span>`
+            : '';
+
+        card.className = `product-card p-4 rounded-2xl shadow-sm hover:shadow-md transition border-2 ${bordeColor} ${opacidad} relative flex flex-col justify-between group cursor-pointer`;
+        
         card.innerHTML = `
-            <div class="flex justify-between items-start">
-                <h3 class="font-bold text-lg text-gray-800 leading-tight">${p.name}</h3>
+            <div>
+                <div class="flex justify-between items-start gap-2">
+                    <h3 class="font-bold text-base text-gray-800 leading-tight">${p.name}</h3>
+                    <div class="flex items-center gap-1 shrink-0">
+                        ${tagBadge}
+                        <button class="btn-print-pos opacity-0 group-hover:opacity-100 transition-opacity bg-blue-50 hover:bg-blue-200 text-blue-600 p-1.5 rounded-lg text-xs" title="Imprimir Etiqueta">
+                            🏷️
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="flex justify-between items-center mt-3">
-                <p class="text-pink-600 font-bold text-xl">${formatMoney(p.price)}</p>
-                <p class="text-sm text-gray-600 font-medium">Stock: ${p.stock}</p>
+
+            <div class="flex justify-between items-end mt-4">
+                <div>
+                    <p class="text-pink-600 font-black text-xl leading-none">${formatMoney(p.price)}</p>
+                    ${p.barcode ? `<p class="text-[10px] text-gray-400 font-mono mt-1">${p.barcode}</p>` : ''}
+                </div>
+                <span class="text-xs ${p.stock <= 5 && p.stock > 0 ? 'text-orange-600 font-bold' : 'text-gray-500'} font-medium">
+                    Stock: ${p.stock}
+                </span>
             </div>
         `;
 
+        // Evento de impresión directa desde la tarjeta del POS
+        const btnPrint = card.querySelector('.btn-print-pos');
+        if (btnPrint) {
+            btnPrint.onclick = (e) => {
+                e.stopPropagation(); // Evita meter el producto al carrito cuando solo se quiere imprimir
+                if (typeof window.imprimirEtiquetas === 'function') {
+                    window.imprimirEtiquetas([p]);
+                } else {
+                    alert('Función de impresión no disponible.');
+                }
+            };
+        }
+
+        // Evento normal de agregar al carrito (al tocar la tarjeta)
         if (clickeable) {
             card.onclick = () => {
                 const inputGranel = document.getElementById('bulkMoneyInput');
@@ -227,10 +265,10 @@ function renderProducts(products) {
                 addToCart(p, cant);
             };
         }
+
         productsDiv.appendChild(card);
     });
 }
-
 // ====================
 // ADMIN DE PRODUCTOS
 // ====================
@@ -286,10 +324,28 @@ if (btnGuardar) {
     btnGuardar.onclick = async () => {
         const name    = document.getElementById('nameInput').value.trim();
         const price   = parseFloat(document.getElementById('priceInput').value);
-        const stock   = parseInt(document.getElementById('stockInput').value) || 0;
-        const barcode = document.getElementById('barcodeInput').value.trim();
+        const stock   = parseFloat(document.getElementById('stockInput').value) || 0; // Cambiado a parseFloat por si usas decimales en kilos
+        let barcode   = document.getElementById('barcodeInput').value.trim();
         const tags    = document.getElementById('tagsInput').value
             .split(',').map(t => t.trim().toLowerCase()).filter(t => t !== '');
+
+        // 🟢 NUVOS CAMPOS: Captura de Granel y Unidad de medida
+        const isBulkInput = document.getElementById('isBulkInput');
+        const unitInput   = document.getElementById('unitInput');
+        
+        const isBulk = isBulkInput ? isBulkInput.checked : false;
+        const unit   = unitInput ? (unitInput.value.trim() || 'kg') : 'kg';
+
+        // 🟢 LÓGICA DE CÓDIGO DE BARRAS / GRANEL
+        if (!isBulk && !barcode) {
+            alert('⚠️ Ingresa un código de barras para productos normales.');
+            return;
+        }
+
+        // Si es a granel y no escribieron código, genera uno automático interno
+        if (isBulk && !barcode) {
+            barcode = 'GRANEL-' + Date.now();
+        }
 
         if (!name || isNaN(price)) { alert('⚠️ Llena nombre y precio.'); return; }
 
@@ -301,15 +357,23 @@ if (btnGuardar) {
             const res = await fetch(url, {
                 method: metodo,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ barcode, name, price, stock, tags })
+                // 🟢 Se agregan 'isBulk' y 'unit' al cuerpo de la petición
+                body: JSON.stringify({ barcode, name, price, stock, tags, isBulk, unit })
             });
 
             if (res.ok) {
                 alert(esEdicion ? '✨ ¡Producto actualizado!' : '✅ ¡Producto guardado!');
                 productoEnEdicionId = null;
 
-                ['nameInput','priceInput','stockInput','barcodeInput','tagsInput']
-                    .forEach(id => { document.getElementById(id).value = ''; });
+                // Limpiar campos de texto
+                ['nameInput','priceInput','stockInput','barcodeInput','tagsInput','unitInput']
+                    .forEach(id => { 
+                        const el = document.getElementById(id);
+                        if (el) el.value = ''; 
+                    });
+
+                // 🟢 Desmarcar casilla de granel
+                if (isBulkInput) isBulkInput.checked = false;
 
                 document.getElementById('barcodeInput').disabled = false;
                 document.getElementById('barcodeInput').classList.remove('bg-gray-100');
@@ -329,6 +393,7 @@ if (btnGuardar) {
         }
     };
 }
+
 
 // ====================
 // 🛒 CARRITO
@@ -445,30 +510,38 @@ btnPOS?.addEventListener('click', () => {
     hideAllSections();
     posSection?.classList.remove('hidden');
     // Resaltar botón activo
-    [btnPOS, btnProducts, btnReports, btnPartners].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
+    [btnPOS, btnProducts, btnReports, btnPartners, btnVentas].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
     btnPOS?.classList.add('border-b-2', 'border-white');
 });
 
 btnProducts?.addEventListener('click', () => {
     hideAllSections();
     productsSection?.classList.remove('hidden');
-    [btnPOS, btnProducts, btnReports, btnPartners].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
+    [btnPOS, btnProducts, btnReports, btnPartners, btnVentas].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
     btnProducts?.classList.add('border-b-2', 'border-white');
 });
 
 btnReports?.addEventListener('click', () => {
     hideAllSections();
     reportsSection?.classList.remove('hidden');
-    [btnPOS, btnProducts, btnReports, btnPartners].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
+   [btnPOS, btnProducts, btnReports, btnPartners, btnVentas].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
     btnReports?.classList.add('border-b-2', 'border-white');
 });
 
 btnPartners?.addEventListener('click', () => {
     hideAllSections();
     partnersSection?.classList.remove('hidden');
-    [btnPOS, btnProducts, btnReports, btnPartners].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
+    [btnPOS, btnProducts, btnReports, btnPartners, btnVentas].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
     btnPartners?.classList.add('border-b-2', 'border-white');
     fetchPartners();
+});
+
+btnVentas?.addEventListener('click', () => {
+    hideAllSections();
+    ventasSection?.classList.remove('hidden');
+    [btnPOS, btnProducts, btnReports, btnPartners, btnVentas].forEach(b => b?.classList.remove('border-b-2', 'border-white'));
+    btnVentas?.classList.add('border-b-2', 'border-white');
+    fetchSales();
 });
 
 // ====================
@@ -632,8 +705,17 @@ function mostrarResultados(listaVentas, contenedorDiv) {
             v.products.forEach(item => {
                 const idProd = item.product?._id || item.product;
                 const productoInfo = allProducts.find(p => String(p._id) === String(idProd));
-                let tagSocio = 'GENERAL';
-                if (productoInfo?.tags?.length > 0) tagSocio = productoInfo.tags[0].toUpperCase();
+                
+                let tagSocio = 'TIENDA';
+                if (productoInfo?.tags?.length > 0) {
+                    const tagProd = String(productoInfo.tags[0]).toLowerCase().trim();
+                    const socioEncontrado = (allPartners || []).find(partner => 
+                        String(partner.tag || '').toLowerCase().trim() === tagProd ||
+                        String(partner.name || '').toLowerCase().trim() === tagProd
+                    );
+                    tagSocio = socioEncontrado ? socioEncontrado.name.toUpperCase() : tagProd.toUpperCase();
+                }
+
                 const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 0);
                 porSocio[tagSocio] = (porSocio[tagSocio] || 0) + subtotal;
             });
@@ -660,9 +742,6 @@ function mostrarResultados(listaVentas, contenedorDiv) {
     contenedorDiv.innerHTML = html;
 }
 
-// ====================
-// 📥 EXPORTAR EXCEL
-// ====================
 window.exportarExcel = async function () {
     try {
         const res = await fetch(`${API_URL}/sales`);
@@ -671,31 +750,302 @@ window.exportarExcel = async function () {
 
         if (ventas.length === 0) { alert('No hay ventas registradas.'); return; }
 
-        let csv = 'Fecha,Total,Metodo de Pago,Productos\n';
+        // 1. Obtener dinámicamente las columnas según tus socios/tags reales registrados
+        const nombresSocios = (allPartners || []).map(p => p.name.toUpperCase().trim());
+        
+        // Si por alguna razón no han cargado los socios, usamos la lista real de tu pantalla
+        const columnasSocios = nombresSocios.length > 0 
+            ? nombresSocios 
+            : ['DENISSE', 'MARIA', 'BIMBO', 'VERDURA'];
+
+        // Construir la lista final: TIENDA primero + los nombres de socios (sin repetir)
+        const categorias = ['TIENDA', ...columnasSocios.filter(c => c !== 'TIENDA')];
+
+        // Encabezado del CSV con formato utf-8 BOM para Excel
+        let csv = '\uFEFF';
+        csv += 'Fecha,' + categorias.join(',') + ',Total\n';
+
         ventas.forEach(v => {
-            const fecha  = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin Fecha';
-            const total  = v.total || 0;
-            const metodo = v.paymentMethod || 'efectivo';
-            let detalle  = 'Venta';
+            const fecha = v.createdAt ? v.createdAt.substring(0, 10) : 'Sin Fecha';
+            
+            // Inicializar acumuladores por categoría en $0
+            const subtotalesPorCategoria = {};
+            categorias.forEach(cat => subtotalesPorCategoria[cat] = 0);
+
+            let totalVenta = Number(v.total) || 0;
+
+            // 2. Mapear cada producto vendido a su socio/tag correspondiente
             if (v.products && Array.isArray(v.products)) {
-                detalle = v.products.map(p => {
-                    const id   = p.product?._id || p.product;
+                v.products.forEach(p => {
+                    const id = p.product?._id || p.product;
                     const info = allProducts.find(prod => String(prod._id) === String(id));
-                    return `${info ? info.name : 'Producto'} (x${p.quantity})`;
-                }).join(' - ');
+                    
+                    const precioUnitario = Number(p.price) || (info ? Number(info.price) : 0);
+                    const cantidad = Number(p.quantity) || 1;
+                    const subtotalProducto = cantidad * precioUnitario;
+
+                    let categoriaAsignada = 'TIENDA';
+
+                    if (info && info.tags && info.tags.length > 0) {
+                        const tagProducto = String(info.tags[0]).toLowerCase().trim();
+                        
+                        // Buscar coincidencia en la lista de socios (por tag ej "#m" o por nombre ej "maria")
+                        const socioEncontrado = (allPartners || []).find(partner => {
+                            const pTag = String(partner.tag || '').toLowerCase().trim();
+                            const pName = String(partner.name || '').toLowerCase().trim();
+                            return pTag === tagProducto || pName === tagProducto;
+                        });
+
+                        if (socioEncontrado) {
+                            categoriaAsignada = socioEncontrado.name.toUpperCase().trim();
+                        } else {
+                            const catDirecta = categorias.find(c => c.toLowerCase() === tagProducto);
+                            if (catDirecta) categoriaAsignada = catDirecta;
+                        }
+                    }
+
+                    // Asignar al acumulador de la categoría correspondiente
+                    if (subtotalesPorCategoria.hasOwnProperty(categoriaAsignada)) {
+                        subtotalesPorCategoria[categoriaAsignada] += subtotalProducto;
+                    } else {
+                        subtotalesPorCategoria['TIENDA'] += subtotalProducto;
+                    }
+                });
             }
-            csv += `${fecha},${total},${metodo},"${detalle}"\n`;
+
+            // 3. Si la categoría tiene $0 se deja en blanco (como en la foto de tu Excel)
+            const valoresColumnas = categorias.map(cat => {
+                const monto = subtotalesPorCategoria[cat];
+                return monto > 0 ? monto.toFixed(2) : '';
+            });
+
+            csv += `${fecha},${valoresColumnas.join(',')},${totalVenta.toFixed(2)}\n`;
         });
 
+        // 4. Descargar archivo CSV
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        link.href     = URL.createObjectURL(blob);
-        link.download = `Reporte_Ventas_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`;
+        link.href = URL.createObjectURL(blob);
+        link.download = `Reporte_Ventas_Matriz_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
     } catch (error) {
         console.error('Error Excel:', error);
         alert('Error al generar el archivo.');
     }
+};
+
+// ====================
+// 🧾 HISTORIAL DE VENTAS
+// ====================
+async function fetchSales() {
+    if (!ventasList) return;
+    ventasList.innerHTML = '<p class="text-center text-gray-400 py-6 animate-pulse">Cargando ventas...</p>';
+    try {
+        const res = await fetch(`${API_URL}/sales`);
+        if (!res.ok) throw new Error('Error al obtener ventas');
+        const ventas = await res.json();
+        renderVentas(ventas);
+    } catch (error) {
+        console.error('fetchSales error:', error);
+        ventasList.innerHTML = '<p class="text-center text-red-500 py-6">Error al cargar ventas.</p>';
+    }
+}
+
+function renderVentas(ventas) {
+    if (!ventasList) return;
+    ventasList.innerHTML = '';
+
+    if (ventas.length === 0) {
+        ventasList.innerHTML = '<p class="text-center text-gray-400 py-6 italic">No hay ventas registradas</p>';
+        return;
+    }
+
+    ventas.forEach(v => {
+        const cancelada = v.status === 'cancelled';
+
+        const detalle = (v.products || []).map(item => {
+            const nombre = item.product?.name || 'Producto eliminado';
+            return `${nombre} x${item.quantity}`;
+        }).join(', ');
+
+        const fecha = v.createdAt ? new Date(v.createdAt).toLocaleString('es-MX') : 'Sin fecha';
+
+        const div = document.createElement('div');
+        div.className = `bg-white p-4 rounded-2xl shadow-sm border-2 ${cancelada ? 'border-red-200 bg-red-50' : 'border-gray-100'} flex justify-between items-center gap-3`;
+
+        div.innerHTML = `
+            <div class="flex-1 ${cancelada ? 'opacity-60 line-through' : ''}">
+                <div class="flex items-center gap-2">
+                    <span class="font-black text-gray-800 text-lg">${formatMoney(v.total)}</span>
+                    ${cancelada ? '<span class="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg not-italic no-underline">CANCELADA</span>' : ''}
+                </div>
+                <p class="text-xs text-gray-400">${fecha} · ${v.paymentMethod || 'efectivo'}</p>
+                <p class="text-sm text-gray-600 mt-1">${detalle || 'Sin productos'}</p>
+            </div>
+            ${!cancelada ? `<button class="cancel-venta-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-all shrink-0">Cancelar</button>` : ''}
+        `;
+
+        if (!cancelada) {
+            div.querySelector('.cancel-venta-btn').onclick = () => cancelarVenta(v._id);
+        }
+
+        ventasList.appendChild(div);
+    });
+}
+
+async function cancelarVenta(id) {
+    if (!confirm('¿Cancelar esta venta? El stock de los productos se devolverá al inventario.')) return;
+    try {
+        const res = await fetch(`${API_URL}/sales/${id}/cancel`, { method: 'PATCH' });
+        if (res.ok) {
+            alert('✅ Venta cancelada, stock devuelto.');
+            fetchSales();
+            fetchProducts(); // refrescar inventario con el stock ya repuesto
+        } else {
+            const err = await res.json();
+            alert('❌ Error: ' + (err.message || 'No se pudo cancelar'));
+        }
+    } catch (error) {
+        console.error('cancelarVenta error:', error);
+        alert('📡 Error de conexión al cancelar la venta.');
+    }
+}
+
+// ==========================================
+// 🏷️ FUNCIONES DE IMPRESIÓN DE PRECIOS
+// ==========================================
+
+// Imprime solo los productos a granel o sin código de barras
+window.imprimirSoloGranel = function() {
+    const granel = allProducts.filter(p => {
+        if (!p) return false;
+
+        const sinCodigo = !p.barcode || p.barcode.trim() === '';
+        const esCodigoGranel = p.barcode && p.barcode.toUpperCase().startsWith('GRANEL');
+        const esBanderaGranel = p.isBulk === true || p.isBulk === "true" || p.isBulk == 1 || p.is_bulk === true || p.is_bulk == 1;
+
+        return sinCodigo || esCodigoGranel || esBanderaGranel;
+    });
+
+    if (granel.length === 0) {
+        alert('No hay productos registrados a granel o sin código.');
+        return;
+    }
+    imprimirEtiquetas(granel);
+};
+
+// Función principal que abre la ventana limpia lista para imprimir
+window.imprimirEtiquetas = function(productos) {
+    if (!productos || productos.length === 0) {
+        alert('No hay productos para imprimir.');
+        return;
+    }
+
+    // Crear ventana emergente de impresión
+    const win = window.open('', '_blank', 'width=800,height=600');
+    
+    let htmlEtiquetas = '';
+    productos.forEach(p => {
+        // Detectar si es a granel (por código o propiedad)
+        const esGranel = !p.barcode || p.barcode.trim() === '' || p.barcode.toUpperCase().startsWith('GRANEL') || p.isBulk || p.is_bulk;
+        const unidad = esGranel ? (p.unit || 'kg') : 'pza';
+
+        htmlEtiquetas += `
+            <div class="etiqueta">
+                <div class="nombre">${p.name}</div>
+                <div class="precio">$${Number(p.price || 0).toFixed(2)} <span style="font-size: 11px; font-weight: normal; color: #555;">/ ${unidad}</span></div>
+                ${esGranel ? '<div class="granel">⚖️ GRANEL</div>' : `<div class="codigo">${p.barcode}</div>`}
+            </div>
+        `;
+    });
+
+    win.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <title>Imprimir Precios</title>
+            <style>
+                @page {
+                    size: A4;
+                    margin: 10mm;
+                }
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background: #fff;
+                }
+                .grid-etiquetas {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 8mm;
+                }
+                .etiqueta {
+                    border: 2px dashed #333;
+                    border-radius: 8px;
+                    padding: 8px;
+                    text-align: center;
+                    box-sizing: border-box;
+                    page-break-inside: avoid;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 35mm;
+                }
+                .nombre {
+                    font-size: 13px;
+                    font-weight: bold;
+                    color: #111;
+                    line-height: 1.1;
+                    max-height: 2.2em;
+                    overflow: hidden;
+                    margin-bottom: 4px;
+                    text-transform: uppercase;
+                }
+                .precio {
+                    font-size: 22px;
+                    font-weight: 900;
+                    color: #000;
+                    margin: 2px 0;
+                }
+                .codigo {
+                    font-family: monospace;
+                    font-size: 10px;
+                    color: #555;
+                    border-top: 1px solid #ccc;
+                    width: 100%;
+                    padding-top: 2px;
+                    margin-top: 2px;
+                }
+                .granel {
+                    font-size: 9px;
+                    font-weight: bold;
+                    color: #059669;
+                    background: #ecfdf5;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    margin-top: 2px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="grid-etiquetas">
+                ${htmlEtiquetas}
+            </div>
+            <script>
+                window.onload = function() {
+                    window.print();
+                    window.close();
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+
+    win.document.close();
 };

@@ -59,6 +59,7 @@
     <button id="btnProducts" class="opacity-80 hover:opacity-100 text-lg">Productos</button>
     <button id="btnReports" class="opacity-80 hover:opacity-100 text-lg">Reportes</button>
     <button id="btnPartners" class="opacity-80 hover:opacity-100 text-lg">Socios</button>
+    <button id="btnVentas" class="opacity-80 hover:opacity-100 text-lg">Ventas</button>
   </nav>
 
   <main class="flex-1 p-2 md:p-4 overflow-hidden relative">
@@ -99,18 +100,26 @@
       </div>
     </section>
 
-    <section id="productsSection" class="hidden p-6 max-w-7xl mx-auto h-full overflow-y-auto bg-gray-50">
-    <h2 class="text-3xl font-black mb-8 flex items-center gap-2 text-gray-800">
+    <!-- Actualización de la sección de Inventario -->
+<section id="productsSection" class="hidden p-6 max-w-7xl mx-auto h-full bg-gray-50 flex flex-col overflow-hidden">
+    <h2 class="text-3xl font-black mb-6 flex items-center gap-2 text-gray-800 shrink-0">
         📦 Inventario
     </h2>
 
-    <div class="grid md:grid-cols-3 gap-10">
-        <div class="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-pink-500 h-fit sticky top-0">
-            <h3 class="text-xl font-black text-pink-600 mb-6 flex items-center gap-2">
-                📝 Editar / Crear
-            </h3>
+    <!-- Contenedor del Grid para hacer que las columnas se estiren a la altura total -->
+    <div class="grid md:grid-cols-3 gap-8 flex-1 overflow-hidden">
+        
+        <!-- 🔽 COLUMNA 1: FORMULARIO DE CREACIÓN/EDICIÓN - AHORA ES UN PANEL DESPLAZABLE 🔽 -->
+        <div class="bg-white rounded-3xl shadow-xl border-t-8 border-pink-500 h-full flex flex-col overflow-hidden">
+            <!-- Título fijo dentro del panel -->
+            <div class="p-8 pb-2 border-b border-gray-100">
+                <h3 class="text-xl font-black text-pink-600 flex items-center gap-2">
+                    📝 Editar / Crear
+                </h3>
+            </div>
 
-            <div class="space-y-4">
+            <!-- 🔄 Contenedor interno que se desplaza (con padding pb-16 para que respire el botón) -->
+            <div class="flex-1 overflow-y-auto p-8 pt-6 space-y-4 pb-16">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">Código de Barras</label>
                     <input id="barcodeInput" type="text" placeholder="Escanea..." class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all"/>
@@ -137,24 +146,59 @@
                     <input id="tagsInput" type="text" placeholder="Ej: m, p, abarrotes" class="w-full p-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
                 </div>
 
-                <button id="addProduct" class="w-full mt-4 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
+                <div class="bg-pink-50 p-4 rounded-2xl border-2 border-pink-200 space-y-3">
+                    <label class="flex items-center gap-3 cursor-pointer select-none">
+                        <input id="isBulkInput" type="checkbox" class="w-5 h-5 accent-pink-600 rounded cursor-pointer">
+                        <span class="text-sm font-bold text-gray-700">⚖️ Vender a Granel</span>
+                    </label>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase ml-1 mb-1">
+                            Unidad de Medida <span class="text-pink-400 font-normal">(Opcional)</span>
+                        </label>
+                        <input id="unitInput" type="text" placeholder="Ej: kg, g, lt (Por defecto: kg)" class="w-full p-3 bg-white border-2 border-pink-100 rounded-xl focus:border-pink-400 outline-none transition-all" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón de guardar fijo en la parte inferior del panel -->
+            <div class="p-8 pt-2 shrink-0">
+                <button id="addProduct" class="w-full mt-2 bg-pink-600 hover:bg-pink-700 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">
                     Guardar Producto
                 </button>
             </div>
         </div>
 
-        <div class="md:col-span-2">
-            <h3 class="text-xl font-black text-gray-700 mb-4">Lista de Productos</h3>
+        <!-- 🔽 COLUMNA 2-3: LISTA DE PRODUCTOS - AHORA TAMBIÉN ES UN PANEL DESPLAZABLE INDEPENDIENTE 🔽 -->
+        <div class="md:col-span-2 flex flex-col h-full overflow-hidden">
             
-            <div class="relative mb-6">
-                <span class="absolute inset-y-0 left-4 flex items-center text-pink-500">
-                    🔍
-                </span>
-                <input id="inventorySearch" type="text" placeholder="Buscar por nombre o código..." class="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-100 rounded-2xl shadow-sm focus:border-pink-400 outline-none transition-all"/>
+            <!-- Controles de búsqueda y botones fijos arriba de la lista -->
+            <div class="p-2 pt-0 pb-6 shrink-0">
+                <h3 class="text-xl font-black text-gray-700 mb-4">Lista de Productos</h3>
+                
+                <div class="relative mb-6">
+                    <span class="absolute inset-y-0 left-4 flex items-center text-pink-500">
+                        🔍
+                    </span>
+                    <input id="inventorySearch" type="text" placeholder="Buscar por nombre o código..." class="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-100 rounded-2xl shadow-sm focus:border-pink-400 outline-none transition-all"/>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="imprimirEtiquetas(allProducts)" class="bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
+                        🖨️ Imprimir Todas las Etiquetas
+                    </button>
+                    <button onclick="imprimirSoloGranel()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 shadow-md">
+                        ⚖️ Imprimir Etiquetas a Granel
+                    </button>
+                </div>
             </div>
 
-            <div id="productList" class="space-y-3">
+            <!-- 🔄 Contenedor que se desplaza con la lista de productos -->
+            <div class="flex-1 overflow-y-auto p-2 pt-0 pb-10">
+                <div id="productList" class="space-y-3">
+                    <!-- Los productos aparecerán aquí -->
                 </div>
+            </div>
         </div>
     </div>
 </section>
@@ -192,6 +236,11 @@
         </div>
         <div id="partnerList" class="space-y-2"></div>
     </div>
+
+    <section id="ventasSection" class="hidden max-w-4xl mx-auto mt-4 h-full overflow-y-auto p-4">
+    <h2 class="text-3xl font-black mb-6 text-center text-gray-800">🧾 Historial de Ventas</h2>
+    <div id="ventasList" class="space-y-3"></div>
+</section>
 
   </main>
 
